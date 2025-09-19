@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "description": "Servidor para o site AgroBet",
   "main": "server.js",
+  "type": "module",
   "scripts": {
     "start": "node server.js",
     "test": "echo \"Error: no test specified\" && exit 1"
@@ -17,3 +18,4 @@
     "mercadopago": "^2.0.10"
   }
 }
+
