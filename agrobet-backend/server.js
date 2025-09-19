@@ -1,126 +1,171 @@
-// 1. Importar os pacotes
 import express from 'express';
 import cors from 'cors';
-import fetch from 'node-fetch';
-import fs from 'fs/promises';
-import path from 'path';
+import { MercadoPagoConfig, Preference } from 'mercadopago';
+import mongoose from 'mongoose';
+import 'dotenv/config';
+import bcrypt from 'bcryptjs';
 
-// 2. Configurações iniciais
+// --- Modelos da Base de Dados ---
+const UserSchema = new mongoose.Schema({
+    name: { type: String, required: true },
+    pix: { type: String, required: true, unique: true, index: true },
+    password: { type: String, required: true, minlength: 6 }
+});
+const User = mongoose.model('User', UserSchema);
+
+const BetSchema = new mongoose.Schema({
+    gameTitle: String,
+    betChoice: String,
+    betValue: Number,
+    date: Date,
+    user: {
+        name: String,
+        pix: String
+    }
+});
+const Bet = mongoose.model('Bet', BetSchema);
+
+// --- Conexão à Base de Dados ---
+mongoose.connect(process.env.MONGODB_URI)
+    .then(() => console.log("Conexão com MongoDB estabelecida com sucesso."))
+    .catch(err => console.error("Erro ao conectar com MongoDB:", err));
+
+// --- Configuração do Servidor Express ---
 const app = express();
-const port = process.env.PORT || 3000;
-const DB_FILE = path.resolve(process.cwd(), 'relatorio_apostas.json');
-const MERCADO_PAGO_ACCESS_TOKEN = process.env.MERCADO_PAGO_ACCESS_TOKEN;
-
-// 3. Middlewares
 app.use(cors());
 app.use(express.json());
 
-// --- FUNÇÃO AUXILIAR PARA GUARDAR APOSTAS ---
-async function saveBet(betData) {
-    try {
-        let allBets = [];
-        try {
-            const data = await fs.readFile(DB_FILE, 'utf-8');
-            allBets = JSON.parse(data);
-        } catch (error) {
-            // Se o arquivo não existe, começa com um array vazio
-        }
-        allBets.unshift(betData);
-        await fs.writeFile(DB_FILE, JSON.stringify(allBets, null, 2), 'utf-8');
-    } catch (error) {
-        console.error('Falha ao guardar a aposta no ficheiro.', error);
-    }
-}
+// --- Configuração do Mercado Pago ---
+const client = new MercadoPagoConfig({ accessToken: process.env.MERCADO_PAGO_ACCESS_TOKEN });
+const preference = new Preference(client);
 
-// --- ROTAS DA APLICAÇÃO ---
+// --- ROTAS DA API ---
 
-// NOVA ROTA: Página inicial para mostrar que o servidor está online
 app.get('/', (req, res) => {
-    res.send('<h1>Servidor do AgroBet está no ar!</h1><p>Este é o back-end do site de apostas. A comunicação com ele é feita através do site principal.</p>');
+    res.send(`
+        <body style="font-family: sans-serif; text-align: center; padding-top: 50px;">
+            <h1>Servidor do AgroBet está no ar!</h1>
+            <p>Este é o back-end do site de apostas. A comunicação com ele é feita através do site principal.</p>
+        </body>
+    `);
 });
 
-// Rota principal para criar pagamentos
-app.post('/criar-pagamento', async (req, res) => {
+// Rota de Login de Utilizador
+app.post('/login', async (req, res) => {
     try {
-        if (!MERCADO_PAGO_ACCESS_TOKEN) {
-            throw new Error("Token do Mercado Pago não foi configurado no servidor.");
+        const { pix, password } = req.body;
+        if (!pix || !password) {
+            return res.status(400).json({ success: false, message: "PIX e senha são obrigatórios." });
         }
-        const { title, description, unit_price, user } = req.body;
-        if (!user || !user.name || !user.pix) {
-            return res.status(400).send('Dados do utilizador (nome e PIX) são obrigatórios.');
+        
+        const user = await User.findOne({ pix: pix });
+        if (!user) {
+            return res.status(404).json({ success: false, message: "Utilizador não encontrado." });
         }
-        const preference = {
-            items: [{
-                title,
-                description,
-                quantity: 1,
-                currency_id: 'BRL',
-                unit_price: parseFloat(unit_price)
-            }],
-            back_urls: {
-                success: 'https://viniciosxt.github.io/bets/', // Atualize se a URL do seu site mudar
-                failure: 'https://viniciosxt.github.io/bets/',
-            },
-            auto_return: 'approved',
-        };
-        const response = await fetch('https://api.mercadopago.com/checkout/preferences', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${MERCADO_PAGO_ACCESS_TOKEN}`
-            },
-            body: JSON.stringify(preference)
+
+        const isMatch = await bcrypt.compare(password, user.password);
+        if (!isMatch) {
+            return res.status(400).json({ success: false, message: "Chave PIX ou senha inválida." });
+        }
+
+        // Não retornar a senha encriptada
+        const userResponse = { _id: user._id, name: user.name, pix: user.pix };
+        res.json({ success: true, user: userResponse });
+
+    } catch (error) {
+        console.error("Erro no login:", error);
+        res.status(500).json({ success: false, message: "Erro interno do servidor." });
+    }
+});
+
+// Rota de Registo de Utilizador
+app.post('/register', async (req, res) => {
+    try {
+        const { name, pix, password } = req.body;
+        if (!name || !pix || !password) {
+            return res.status(400).json({ success: false, message: "Nome, PIX e senha são obrigatórios." });
+        }
+        if (password.length < 6) {
+             return res.status(400).json({ success: false, message: "A senha deve ter no mínimo 6 caracteres." });
+        }
+
+        const existingUser = await User.findOne({ pix: pix });
+        if (existingUser) {
+            return res.status(409).json({ success: false, message: "Esta chave PIX já está registada." });
+        }
+
+        const salt = await bcrypt.genSalt(10);
+        const hashedPassword = await bcrypt.hash(password, salt);
+
+        const newUser = new User({ name, pix, password: hashedPassword });
+        await newUser.save();
+
+        // Não retornar a senha encriptada
+        const userResponse = { _id: newUser._id, name: newUser.name, pix: newUser.pix };
+        res.status(201).json({ success: true, user: userResponse });
+
+    } catch (error) {
+        console.error("Erro no registo:", error);
+        res.status(500).json({ success: false, message: "Erro interno do servidor." });
+    }
+});
+
+// Rota para criar pagamento (inalterada)
+app.post('/criar-pagamento', async (req, res) => {
+    const { title, description, unit_price, user } = req.body;
+    try {
+        const result = await preference.create({
+            body: {
+                items: [{
+                    title: title,
+                    description: description,
+                    quantity: 1,
+                    unit_price: Number(unit_price),
+                    currency_id: 'BRL',
+                }],
+            }
         });
-        const data = await response.json();
-        if (!response.ok) {
-            console.error('Erro do Mercado Pago:', data);
-            throw new Error('Falha na comunicação com o Mercado Pago.');
-        }
-        const betRecord = {
+        const newBet = new Bet({
             gameTitle: title,
             betChoice: description.replace('Palpite: ', ''),
-            betValue: unit_price,
-            date: new Date().toLocaleString('pt-BR'),
-            user: user
-        };
-        await saveBet(betRecord);
-        res.json({ init_point: data.init_point });
+            betValue: Number(unit_price),
+            date: new Date(),
+            user: { name: user.name, pix: user.pix }
+        });
+        await newBet.save();
+        res.json({ id: result.id, init_point: result.init_point });
     } catch (error) {
-        console.error('Erro interno:', error.message);
-        res.status(500).send('Erro ao criar a preferência de pagamento.');
+        console.error('Erro ao criar pagamento ou guardar aposta:', error);
+        res.status(500).send('Erro no servidor.');
     }
 });
 
-// ROTA DO ADMIN PARA VER O RELATÓRIO
+// Rota para obter o relatório de apostas (inalterada)
 app.get('/relatorio', async (req, res) => {
     try {
-        let allBets = [];
-        try {
-            const data = await fs.readFile(DB_FILE, 'utf-8');
-            allBets = JSON.parse(data);
-        } catch (error) {
-            // Arquivo não existe ou está vazio
-        }
+        const bets = await Bet.find().sort({ date: -1 });
         let html = `
-            <!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><title>Relatório de Apostas - AgroBet</title><script src="https://cdn.tailwindcss.com"></script></head>
-            <body class="bg-gray-100 p-8"><div class="max-w-4xl mx-auto bg-white rounded-lg shadow-lg p-6">
-            <h1 class="text-3xl font-bold text-green-700 mb-6">Relatório de Todas as Apostas</h1>
-            ${allBets.length === 0 ? '<p>Nenhuma aposta registada ainda.</p>' : `
-            <table class="min-w-full divide-y divide-gray-200"><thead class="bg-gray-50"><tr>
-            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Data</th>
-            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Apostador</th>
-            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Chave PIX</th>
-            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Aposta</th>
-            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Valor</th>
-            </tr></thead><tbody class="bg-white divide-y divide-gray-200">
-            ${allBets.map(bet => `<tr>
-                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${bet.date}</td>
-                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${bet.user.name}</td>
-                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${bet.user.pix}</td>
-                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${bet.betChoice} no jogo ${bet.gameTitle.replace('Aposta no jogo: ','')}</td>
-                <td class="px-6 py-4 whitespace-nowrap text-sm font-bold text-green-600">R$ ${bet.betValue}</td>
-            </tr>`).join('')}
-            </tbody></table>`}</div></body></html>`;
+            <style>
+                body { font-family: sans-serif; margin: 20px; background-color: #f4f4f4; } h1 { color: #2e7d32; } table { width: 100%; border-collapse: collapse; margin-top: 20px; } th, td { border: 1px solid #ddd; padding: 12px; text-align: left; } th { background-color: #2e7d32; color: white; } tr:nth-child(even) { background-color: #f2f2f2; } tr:hover { background-color: #ddd; }
+            </style>
+            <h1>Relatório de Apostas - AgroBet</h1>
+            <table>
+                <thead> <tr> <th>Data</th> <th>Jogo</th> <th>Palpite</th> <th>Valor (R$)</th> <th>Apostador</th> <th>Chave PIX</th> </tr> </thead>
+                <tbody>
+        `;
+        bets.forEach(bet => {
+            html += `
+                <tr>
+                    <td>${new Date(bet.date).toLocaleString('pt-BR')}</td>
+                    <td>${bet.gameTitle.replace('Aposta no jogo: ', '')}</td>
+                    <td>${bet.betChoice}</td>
+                    <td>${bet.betValue.toFixed(2)}</td>
+                    <td>${bet.user.name}</td>
+                    <td>${bet.user.pix}</td>
+                </tr>
+            `;
+        });
+        html += '</tbody></table>';
         res.send(html);
     } catch (error) {
         console.error("Erro ao gerar relatório:", error);
@@ -128,8 +173,8 @@ app.get('/relatorio', async (req, res) => {
     }
 });
 
-// Inicia o servidor
-app.listen(port, () => {
-    console.log(`--> Servidor AgroBet a correr na porta ${port}`);
+const PORT = process.env.PORT || 10000;
+app.listen(PORT, () => {
+    console.log(`--> Servidor AgroBet a correr na porta ${PORT}`);
 });
 
