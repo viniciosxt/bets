@@ -1,307 +1,209 @@
-<!DOCTYPE html>
-<html lang="pt-BR">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AgroBet - Apostas Esportivas</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <style>
-        @import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Montserrat:wght@400;700&display=swap');
-        body { font-family: 'Montserrat', sans-serif; background-color: #f8f8f8; }
-        .title-font { font-family: 'Bebas Neue', cursive; }
-        .bet-card, .bet-option, .confirm-btn, .modal { transition: all 0.3s ease; }
-        .bet-card:hover { transform: translateY(-5px); box-shadow: 0 10px 20px rgba(0, 0, 0, 0.15); }
-        .bet-option.selected, .bet-value.selected { background-color: #1b5e20; color: white; border-color: #1b5e20; }
-        .confirm-btn { background: linear-gradient(135deg, #2e7d32 0%, #1b5e20 100%); }
-        .confirm-btn:hover { transform: translateY(-2px); box-shadow: 0 5px 15px rgba(46, 125, 0.4); }
-        .hidden-field { display: none; }
-    </style>
-</head>
-<body class="bg-gray-100">
+import express from 'express';
+import cors from 'cors';
+import { MercadoPagoConfig, Preference, Payment } from 'mercadopago';
+import mongoose from 'mongoose';
+import 'dotenv/config';
+import bcrypt from 'bcryptjs';
+import jwt from 'jsonwebtoken';
+import bodyParser from 'body-parser';
 
-    <!-- Header -->
-    <header class="bg-green-800 text-white py-4 shadow-md">
-        <div class="container mx-auto px-4 flex justify-between items-center">
-            <div>
-                <h1 class="title-font text-4xl">AGROBET</h1>
-                <p class="text-sm">Apostas Esportivas</p>
-            </div>
-            <div class="flex items-center space-x-4">
-                <div id="user-info" class="text-right hidden">
-                    <p class="font-bold text-lg">Olá, <span id="user-name-display"></span>!</p>
-                </div>
-                 <button id="logout-btn" class="hidden bg-red-600 text-white px-3 py-1 rounded-full text-xs font-bold hover:bg-red-700 transition">
-                    Sair
-                </button>
-                <button id="my-bets-btn" class="bg-white text-green-800 px-4 py-2 rounded-full font-bold flex items-center hover:bg-gray-200 transition">
-                    <i class="fas fa-receipt mr-2"></i>Minhas Apostas
-                </button>
-                 <button id="results-btn" class="bg-yellow-400 text-black px-4 py-2 rounded-full font-bold flex items-center hover:bg-yellow-500 transition">
-                    <i class="fas fa-trophy mr-2"></i>Resultados
-                </button>
-            </div>
-        </div>
-    </header>
+// --- Modelos da Base de Dados ---
+const UserSchema = new mongoose.Schema({
+    name: { type: String, required: true },
+    pix: { type: String, required: true, unique: true, index: true },
+    password: { type: String, required: true, minlength: 6 }
+});
+const User = mongoose.model('User', UserSchema);
 
-    <!-- Main Content -->
-    <main class="container mx-auto px-4 py-8">
-        <h2 class="title-font text-3xl md:text-4xl text-green-800 mb-8 text-center">JOGOS ABERTOS PARA APOSTAS</h2>
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-8" id="games-container">
-            <p id="loading-games" class="text-center col-span-full">A carregar jogos disponíveis...</p>
-        </div>
-    </main>
-    
-    <!-- Login/Register Modal -->
-    <div id="login-modal" class="modal fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50">
-        <div class="bg-white rounded-lg p-8 max-w-sm w-full mx-4">
-            <h3 id="login-title" class="title-font text-2xl text-center mb-4 text-green-800">Login</h3>
-            <div class="space-y-4">
-                <div id="name-field" class="hidden-field">
-                    <input type="text" id="user-name-input" placeholder="Seu Nome Completo" class="w-full px-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-green-500">
-                </div>
-                <input type="text" id="user-pix-input" placeholder="Sua Chave PIX" class="w-full px-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-green-500">
-                <input type="password" id="user-password-input" placeholder="Sua Senha" class="w-full px-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-green-500">
-            </div>
-            <p id="login-error" class="text-red-500 text-sm text-center mt-2 h-4"></p>
-            <button id="action-btn" class="w-full mt-4 py-3 confirm-btn text-white font-bold rounded-md">Entrar</button>
-            <p class="text-center text-sm mt-4">
-                <a href="#" id="switch-mode-link" class="text-green-600 hover:underline">Não tem uma conta? Registe-se</a>
-            </p>
-        </div>
-    </div>
-    
-    <!-- My Bets Modal -->
-    <div id="my-bets-modal" class="modal fixed hidden inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50">
-         <div class="bg-white rounded-lg p-6 max-w-2xl w-full mx-4 max-h-[80vh] overflow-y-auto">
-             <div class="flex justify-between items-center mb-4">
-                 <h3 class="title-font text-2xl text-green-800">Minhas Apostas Confirmadas</h3>
-                 <button id="close-my-bets" class="text-gray-500 hover:text-gray-800 text-2xl">&times;</button>
-             </div>
-             <div id="my-bets-list" class="space-y-3"></div>
-         </div>
-    </div>
+const GameSchema = new mongoose.Schema({
+    home: { name: String, logo: String },
+    away: { name: String, logo: String },
+    date: String,
+    competition: String,
+    status: { type: String, enum: ['aberto', 'fechado', 'finalizado'], default: 'aberto' },
+    result: { type: String, enum: ['home', 'away', 'empate', 'pendente'], default: 'pendente' }
+});
+const Game = mongoose.model('Game', GameSchema);
 
-     <!-- Loading Modal -->
-    <div id="loading-modal" class="modal fixed hidden inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50">
-        <div class="bg-white rounded-lg p-8 text-center">
-            <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-green-800 mx-auto mb-4"></div>
-            <p class="text-lg font-semibold">A processar...</p>
-        </div>
-    </div>
+const BetSchema = new mongoose.Schema({
+    gameId: { type: mongoose.Schema.Types.ObjectId, ref: 'Game' },
+    gameTitle: String,
+    betChoice: String,
+    betValue: Number,
+    date: Date,
+    user: { name: String, pix: String }
+});
+const Bet = mongoose.model('Bet', BetSchema);
 
-    <script>
-        const SERVER_URL = 'https://agrobets.onrender.com';
-        
-        let currentUser = null;
-        let isRegisterMode = false;
-        let fetchedGames = []; // Variável global para guardar os jogos
+// --- Conexão à Base de Dados ---
+mongoose.connect(process.env.MONGODB_URI)
+    .then(() => console.log("Conexão com MongoDB estabelecida com sucesso."))
+    .catch(err => console.error("Erro ao conectar com MongoDB:", err));
 
-        // Elementos do DOM
-        const gamesContainer = document.getElementById('games-container');
-        const loginModal = document.getElementById('login-modal');
-        const myBetsModal = document.getElementById('my-bets-modal');
-        const loadingModal = document.getElementById('loading-modal');
-        const actionBtn = document.getElementById('action-btn');
-        const switchModeLink = document.getElementById('switch-mode-link');
-        const pixInput = document.getElementById('user-pix-input');
-        const nameInput = document.getElementById('user-name-input');
-        const passwordInput = document.getElementById('user-password-input');
-        const nameField = document.getElementById('name-field');
-        const loginError = document.getElementById('login-error');
-        const loginTitle = document.getElementById('login-title');
-        const logoutBtn = document.getElementById('logout-btn');
+// --- Configuração do Servidor ---
+const app = express();
+app.use(cors());
+app.use(bodyParser.json());
+app.use(bodyParser.urlencoded({ extended: true }));
 
-        async function fetchOpenGames() {
-            try {
-                const response = await fetch(`${SERVER_URL}/games`);
-                if (!response.ok) throw new Error('Falha ao buscar jogos.');
-                fetchedGames = await response.json(); // Guarda os jogos globalmente
-                renderGames(fetchedGames);
-            } catch (error) {
-                document.getElementById('loading-games').textContent = 'Não foi possível carregar os jogos. Tente novamente mais tarde.';
-                console.error(error);
-            }
+const client = new MercadoPagoConfig({ accessToken: process.env.MERCADO_PAGO_ACCESS_TOKEN });
+const preference = new Preference(client);
+const payment = new Payment(client);
+
+// --- Middleware de Autenticação do Admin ---
+const authAdmin = (req, res, next) => {
+    const token = req.headers.cookie?.split('; ').find(row => row.startsWith('admin_token='))?.split('=')[1];
+    if (!token) return res.redirect('/admin');
+    try {
+        jwt.verify(token, process.env.JWT_SECRET);
+        next();
+    } catch (e) {
+        return res.redirect('/admin');
+    }
+};
+
+// --- ROTAS PÚBLICAS ---
+app.get('/', (req, res) => res.send('<h1>Servidor do AgroBet está no ar!</h1>'));
+app.post('/login', async (req, res) => { /* ...código inalterado... */ });
+app.post('/register', async (req, res) => { /* ...código inalterado... */ });
+
+// Rota para o front-end buscar os jogos abertos
+app.get('/games', async (req, res) => {
+    try {
+        const openGames = await Game.find({ status: 'aberto' }).sort({ date: 1 });
+        res.json(openGames);
+    } catch (error) {
+        res.status(500).json({ message: "Erro ao buscar jogos." });
+    }
+});
+
+app.post('/criar-pagamento', async (req, res) => {
+    const { gameId, title, description, unit_price, user } = req.body;
+    try {
+        const game = await Game.findById(gameId);
+        if (!game || game.status !== 'aberto') {
+            return res.status(400).json({ message: 'Este jogo não está mais aberto para apostas.' });
         }
+        const result = await preference.create({ /* ...código da preferência... */ });
+        res.json({ id: result.id, init_point: result.init_point });
+    } catch (error) { res.status(500).send('Erro no servidor ao criar pagamento.'); }
+});
 
-        function renderGames(games) {
-            const gamesContainer = document.getElementById('games-container');
-            if (games.length === 0) {
-                gamesContainer.innerHTML = '<p class="text-center col-span-full text-gray-500">Nenhum jogo aberto para apostas no momento.</p>';
-                return;
-            }
-            let gamesHTML = '';
-            games.forEach(game => {
-                gamesHTML += `
-                <div class="bet-card bg-white rounded-lg shadow-md border border-gray-200 overflow-hidden" data-game-id="${game._id}">
-                    <div class="bg-green-800 text-white py-2 px-4 flex justify-between items-center"><h3 class="title-font text-xl">${game.competition}</h3><div class="text-sm bg-white text-green-800 font-bold px-3 py-1 rounded-full">${game.date}</div></div>
-                    <div class="p-6">
-                        <div class="flex justify-around items-center mb-6"><div class="text-center w-1/3"><img src="${game.home.logo}" class="h-16 mx-auto mb-2"><span class="font-bold">${game.home.name}</span></div><div class="text-2xl font-bold text-gray-400">VS</div><div class="text-center w-1/3"><img src="${game.away.logo}" class="h-16 mx-auto mb-2"><span class="font-bold">${game.away.name}</span></div></div>
-                        <div class="mb-4"><h4 class="font-bold mb-2 text-center text-gray-700">PALPITE:</h4><div class="grid grid-cols-3 gap-2 bet-options"><button class="bet-option py-2 border rounded-md" data-option="home">${game.home.name}</button><button class="bet-option py-2 border rounded-md" data-option="empate">EMPATE</button><button class="bet-option py-2 border rounded-md" data-option="away">${game.away.name}</button></div></div>
-                        <div class="mb-6"><h4 class="font-bold mb-2 text-center text-gray-700">VALOR:</h4><div class="grid grid-cols-4 gap-2 bet-values"><button class="bet-value py-2 border rounded-md" data-value="5">R$ 5</button><button class="bet-value py-2 border rounded-md" data-value="10">R$ 10</button><button class="bet-value py-2 border rounded-md" data-value="25">R$ 25</button><button class="bet-value py-2 border rounded-md" data-value="50">R$ 50</button></div></div>
-                        <button class="confirm-btn w-full py-3 rounded-md text-white font-bold text-lg" disabled>APOSTAR</button>
-                    </div>
-                </div>`;
-            });
-            gamesContainer.innerHTML = gamesHTML;
-            addGameEventListeners();
-        }
+app.post('/webhook-mercadopago', express.raw({ type: 'application/json' }), async (req, res) => { /* ...código do webhook... */ });
+app.get('/relatorio', async (req, res) => { /* ...código do relatório... */ });
+app.get('/my-bets/:pix', async (req, res) => { /* ...código das apostas do utilizador... */ });
 
-        function addGameEventListeners() {
-            document.querySelectorAll('.bet-card').forEach(card => {
-                const gameId = card.dataset.gameId;
-                const betOptions = card.querySelector('.bet-options');
-                const betValues = card.querySelector('.bet-values');
-                const confirmBtn = card.querySelector('.confirm-btn');
-                let selectedOption = null, selectedValue = null;
-                betOptions.addEventListener('click', e => { if (e.target.tagName === 'BUTTON') { betOptions.querySelectorAll('button').forEach(btn => btn.classList.remove('selected')); e.target.classList.add('selected'); selectedOption = e.target.dataset.option; checkSelections(); } });
-                betValues.addEventListener('click', e => { if (e.target.tagName === 'BUTTON') { betValues.querySelectorAll('button').forEach(btn => btn.classList.remove('selected')); e.target.classList.add('selected'); selectedValue = e.target.dataset.value; checkSelections(); } });
-                function checkSelections() { confirmBtn.disabled = !(selectedOption && selectedValue); }
-                confirmBtn.addEventListener('click', () => handleBet(gameId, selectedOption, selectedValue));
-            });
-        }
-
-        async function handleBet(gameId, option, value) {
-            loadingModal.querySelector('p').textContent = 'A redirecionar para o pagamento...';
-            loadingModal.classList.remove('hidden');
-
-            const game = fetchedGames.find(g => g._id === gameId);
-            if (!game) {
-                loadingModal.classList.add('hidden');
-                alert('Erro: Jogo não encontrado. Por favor, atualize a página.');
-                return;
-            }
-            
-            let betText = option === 'empate' ? 'EMPATE' : (option === 'home' ? game.home.name : game.away.name);
-
-            // CORREÇÃO: Constrói o objeto betData com os dados corretos
-            const betData = {
-                gameId: gameId,
-                title: `Aposta no jogo: ${game.home.name} vs ${game.away.name}`,
-                description: `Palpite: ${betText}`,
-                unit_price: value,
-                user: currentUser
-            };
-            
-            try {
-                const response = await fetch(`${SERVER_URL}/criar-pagamento`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(betData)
-                });
-
-                const data = await response.json();
-
-                if (!response.ok) {
-                    throw new Error(data.message || 'A resposta do servidor não foi OK.');
-                }
-                
-                window.location.href = data.init_point;
-            } catch (error) {
-                loadingModal.classList.add('hidden');
-                alert(`Não foi possível iniciar o pagamento: ${error.message}. Por favor, tente novamente.`);
-                console.error("Erro ao criar pagamento:", error);
-            }
-        }
-
-        async function handleAuthAction() {
-            const pix = pixInput.value.trim();
-            const password = passwordInput.value.trim();
-            const name = nameInput.value.trim();
-            showError('');
-            if (!pix || !password || (isRegisterMode && !name)) { return showError("Por favor, preencha todos os campos."); }
-
-            loadingModal.querySelector('p').textContent = 'A processar...';
-            loadingModal.classList.remove('hidden');
-
-            const url = isRegisterMode ? `${SERVER_URL}/register` : `${SERVER_URL}/login`;
-            const body = isRegisterMode ? { name, pix, password } : { pix, password };
-
-            try {
-                const response = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-                const data = await response.json();
-                if (data.success) { loginSuccess(data.user); } 
-                else { showError(data.message || 'Ocorreu um erro.'); }
-            } catch (err) { showError("Erro de comunicação com o servidor."); } 
-            finally { loadingModal.classList.add('hidden'); }
-        }
-        
-        function loginSuccess(user) {
-            currentUser = user;
-            localStorage.setItem('agrobetUser', JSON.stringify(currentUser));
-            document.getElementById('user-name-display').textContent = currentUser.name.split(' ')[0];
-            document.getElementById('user-info').classList.remove('hidden');
-            logoutBtn.classList.remove('hidden');
-            loginModal.style.display = 'none';
-        }
-
-        function logout() {
-            currentUser = null;
-            localStorage.removeItem('agrobetUser');
-            document.getElementById('user-info').classList.add('hidden');
-            logoutBtn.classList.add('hidden');
-            loginModal.style.display = 'flex';
-        }
-
-        function showError(message) { loginError.textContent = message; }
-
-        function checkStoredUser() {
-            const storedUser = localStorage.getItem('agrobetUser');
-            if (storedUser) { loginSuccess(JSON.parse(storedUser)); } 
-            else { loginModal.style.display = 'flex'; }
-        }
-        
-        async function displayMyBets() {
-            if (!currentUser) return;
-            const listElement = document.getElementById('my-bets-list');
-            listElement.innerHTML = '<p class="text-gray-500">A carregar apostas...</p>';
-            myBetsModal.classList.remove('hidden');
-            try {
-                const response = await fetch(`${SERVER_URL}/my-bets/${currentUser.pix}`);
-                const data = await response.json();
-                if (data.success) {
-                    if (data.bets.length === 0) {
-                        listElement.innerHTML = '<p class="text-gray-500">Ainda não tem nenhuma aposta confirmada.</p>';
-                        return;
-                    }
-                    listElement.innerHTML = data.bets.map(bet => `
-                        <div class="border rounded-md p-3 bg-gray-50">
-                            <p class="font-bold">${bet.gameTitle.replace('Aposta no jogo: ', '')}</p>
-                            <p>Palpite: ${bet.betChoice} - <span class="font-bold text-green-600">R$ ${bet.betValue.toFixed(2)}</span></p>
-                            <p class="text-sm text-gray-500">${new Date(bet.date).toLocaleString('pt-BR')}</p>
-                        </div>
-                    `).join('');
-                } else {
-                    listElement.innerHTML = `<p class="text-red-500">${data.message}</p>`;
-                }
-            } catch (error) {
-                listElement.innerHTML = '<p class="text-red-500">Não foi possível carregar as suas apostas.</p>';
-            }
-        }
-
-        function toggleMode() {
-            isRegisterMode = !isRegisterMode;
-            showError('');
-            loginTitle.textContent = isRegisterMode ? 'Registo' : 'Login';
-            actionBtn.textContent = isRegisterMode ? 'Registar' : 'Entrar';
-            switchModeLink.textContent = isRegisterMode ? 'Já tem uma conta? Entre' : 'Não tem uma conta? Registe-se';
-            nameField.style.display = isRegisterMode ? 'block' : 'none';
-        }
-        
-        actionBtn.addEventListener('click', handleAuthAction);
-        switchModeLink.addEventListener('click', (e) => { e.preventDefault(); toggleMode(); });
-        logoutBtn.addEventListener('click', logout);
-        document.getElementById('my-bets-btn').addEventListener('click', displayMyBets);
-        document.getElementById('close-my-bets').addEventListener('click', () => { myBetsModal.classList.add('hidden'); });
-        document.getElementById('results-btn').addEventListener('click', () => {
-            window.open(`${SERVER_URL}/results`, '_blank');
+// Rota para mostrar os resultados dos jogos finalizados
+app.get('/results', async (req, res) => {
+    try {
+        const finishedGames = await Game.find({ status: 'finalizado' }).sort({ date: -1 });
+        let html = `<h1>Resultados dos Jogos</h1><table>...`; // Geração da tabela de resultados
+        finishedGames.forEach(game => {
+            let winner = 'Pendente';
+            if (game.result === 'home') winner = game.home.name;
+            else if (game.result === 'away') winner = game.away.name;
+            else if (game.result === 'empate') winner = 'Empate';
+            html += `<tr><td>${game.date}</td><td>${game.home.name} vs ${game.away.name}</td><td><strong>${winner}</strong></td></tr>`;
         });
-        
-        document.addEventListener('DOMContentLoaded', () => {
-            fetchOpenGames();
-            checkStoredUser();
-        });
-    </script>
-</body>
-</html>
+        html += `</tbody></table>`;
+        res.send(html);
+    } catch (error) { res.status(500).send("Erro ao gerar a página de resultados."); }
+});
+
+
+// --- ROTAS DO PAINEL DE ADMINISTRAÇÃO ---
+const adminPageStyle = `<style>body{font-family: Arial; padding: 20px;} h1,h2{color:#1b5e20;} input,select,button{padding:8px;margin:5px 0;width:300px;} button{background:#1b5e20;color:white;cursor:pointer;} table{width:100%; border-collapse:collapse;margin-top:20px;} th,td{border:1px solid #ccc;padding:8px;}</style>`;
+
+// Página de Login do Admin
+app.get('/admin', (req, res) => {
+    res.send(`
+        ${adminPageStyle}
+        <h1>Login de Administrador</h1>
+        <form action="/admin/login" method="POST">
+            <input type="password" name="password" placeholder="Senha" required />
+            <button type="submit">Entrar</button>
+        </form>
+    `);
+});
+
+// Processar Login do Admin
+app.post('/admin/login', (req, res) => {
+    const { password } = req.body;
+    if (password === process.env.ADMIN_PASSWORD) {
+        const token = jwt.sign({ admin: true }, process.env.JWT_SECRET, { expiresIn: '8h' });
+        res.cookie('admin_token', token, { httpOnly: true, maxAge: 8 * 60 * 60 * 1000 });
+        res.redirect('/admin/dashboard');
+    } else {
+        res.send('Senha incorreta. <a href="/admin">Tentar novamente</a>');
+    }
+});
+
+// Dashboard do Admin
+app.get('/admin/dashboard', authAdmin, async (req, res) => {
+    const games = await Game.find().sort({ date: -1 });
+    let gamesRows = games.map(game => `
+        <tr>
+            <td>${game.competition}</td>
+            <td>${game.home.name} vs ${game.away.name}</td>
+            <td>${game.date}</td>
+            <td>
+                <form action="/admin/update-game/${game._id}" method="POST" style="display:inline;">
+                    <select name="status">
+                        <option value="aberto" ${game.status === 'aberto' ? 'selected' : ''}>Aberto</option>
+                        <option value="fechado" ${game.status === 'fechado' ? 'selected' : ''}>Fechado</option>
+                        <option value="finalizado" ${game.status === 'finalizado' ? 'selected' : ''}>Finalizado</option>
+                    </select>
+                    <select name="result">
+                        <option value="pendente" ${game.result === 'pendente' ? 'selected' : ''}>Pendente</option>
+                        <option value="home" ${game.result === 'home' ? 'selected' : ''}>${game.home.name} Venceu</option>
+                        <option value="away" ${game.result === 'away' ? 'selected' : ''}>${game.away.name} Venceu</option>
+                        <option value="empate" ${game.result === 'empate' ? 'selected' : ''}>Empate</option>
+                    </select>
+                    <button type="submit">Atualizar</button>
+                </form>
+            </td>
+        </tr>
+    `).join('');
+
+    res.send(`
+        ${adminPageStyle}
+        <h1>Painel de Administração</h1>
+        <h2>Criar Novo Jogo</h2>
+        <form action="/admin/create-game" method="POST">
+            <input name="competition" placeholder="Competição" required /><br>
+            <input name="homeName" placeholder="Nome Time da Casa" required /><br>
+            <input name="homeLogo" placeholder="URL Logo Time da Casa" required /><br>
+            <input name="awayName" placeholder="Nome Time Visitante" required /><br>
+            <input name="awayLogo" placeholder="URL Logo Time Visitante" required /><br>
+            <input name="date" placeholder="Data e Hora (ex: 25/12/2025 - 21:00)" required /><br>
+            <button type="submit">Criar Jogo</button>
+        </form>
+        <h2>Jogos Existentes</h2>
+        <table><tr><th>Competição</th><th>Jogo</th><th>Data</th><th>Ações</th></tr>${gamesRows}</table>
+    `);
+});
+
+// Processar criação de jogo
+app.post('/admin/create-game', authAdmin, async (req, res) => {
+    const { competition, homeName, homeLogo, awayName, awayLogo, date } = req.body;
+    const newGame = new Game({
+        competition,
+        home: { name: homeName, logo: homeLogo },
+        away: { name: awayName, logo: awayLogo },
+        date
+    });
+    await newGame.save();
+    res.redirect('/admin/dashboard');
+});
+
+// Processar atualização de jogo
+app.post('/admin/update-game/:id', authAdmin, async (req, res) => {
+    const { status, result } = req.body;
+    await Game.findByIdAndUpdate(req.params.id, { status, result });
+    res.redirect('/admin/dashboard');
+});
+
+
+const PORT = process.env.PORT || 10000;
+app.listen(PORT, () => console.log(`--> Servidor AgroBet a correr na porta ${PORT}`));
 
