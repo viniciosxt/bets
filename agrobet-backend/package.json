@@ -1,7 +1,7 @@
 {
   "name": "agrobet-backend",
   "version": "1.0.0",
-  "description": "Servidor para o site de apostas AgroBet",
+  "description": "",
   "main": "server.js",
   "type": "module",
   "scripts": {
