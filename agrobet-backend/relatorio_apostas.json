@@ -1,0 +1,22 @@
+[
+  {
+    "gameTitle": "Aposta no jogo: CAM vs COR",
+    "betChoice": "CAM",
+    "betValue": "5",
+    "date": "18/09/2025, 22:53:16",
+    "user": {
+      "name": "João Carlos",
+      "pix": "38998333666"
+    }
+  },
+  {
+    "gameTitle": "Aposta no jogo: ROUNDUP vs BULDOG",
+    "betChoice": "BULDOG",
+    "betValue": "25",
+    "date": "18/09/2025, 22:51:35",
+    "user": {
+      "name": "João Carlos",
+      "pix": "38998333666"
+    }
+  }
+]
