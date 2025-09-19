@@ -1,33 +1,35 @@
-const express = require('express');
-const fs = require('fs');
-const path = require('path');
-const cors = require('cors');
-const bodyParser = require('body-parser');
-const mercadopago = require('mercadopago');
+import express from 'express';
+import fs from 'fs';
+import path from 'path';
+import cors from 'cors';
+import bodyParser from 'body-parser';
+import mercadopago from 'mercadopago';
+import { fileURLToPath } from 'url';
+
+// --- Configuração Inicial para ES Modules ---
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 const DB_FILE = path.join(__dirname, 'db.json');
 
-// --- Configuração ---
+// --- Configuração do App ---
 app.use(cors());
 app.use(bodyParser.json());
-app.use(express.static(path.join(__dirname, 'public'))); // Para servir ficheiros estáticos como CSS, se necessário
+app.use(express.static(path.join(__dirname, 'public')));
 
 // Configure as suas credenciais do Mercado Pago
 // Substitua com o seu Access Token REAL
 mercadopago.configure({
-    access_token: 'SEU_ACCESS_TOKEN_REAL_AQUI' 
+    access_token: 'SEU_ACCESS_TOKEN_REAL_AQUI'
 });
 
 // --- Funções Auxiliares para a Base de Dados ---
-
-// Função para garantir que o db.json existe e tem a estrutura base
 function initializeDatabase() {
     if (!fs.existsSync(DB_FILE)) {
         fs.writeFileSync(DB_FILE, JSON.stringify({ jogos: [], apostas: [], admin: { user: 'admin', pass: 'admin123' } }, null, 2));
     } else {
-        // Garante que a estrutura base existe se o ficheiro já foi criado
         const data = JSON.parse(fs.readFileSync(DB_FILE));
         if (!data.jogos) data.jogos = [];
         if (!data.apostas) data.apostas = [];
@@ -37,21 +39,16 @@ function initializeDatabase() {
 }
 
 // --- Rotas da API para o Site (Front-end) ---
-
-// Rota para o cliente (site) obter os jogos ativos
 app.get('/jogos', (req, res) => {
     try {
         const data = JSON.parse(fs.readFileSync(DB_FILE));
-        // Filtra para enviar apenas jogos com status 'ativo'
         const activeGames = data.jogos.filter(j => j.status === 'ativo');
         res.json(activeGames);
     } catch (error) {
-        // Se o arquivo não existir ou der erro, retorna uma lista vazia
         res.json([]);
     }
 });
 
-// Rota para criar a preferência de pagamento
 app.post('/create-payment', async (req, res) => {
     const { gameId, type, amount, choice, userName, userPix } = req.body;
 
@@ -75,7 +72,7 @@ app.post('/create-payment', async (req, res) => {
         choice,
         userName,
         userPix,
-        status: 'pendente' // Status inicial
+        status: 'pendente'
     };
     data.apostas.push(newBet);
     fs.writeFileSync(DB_FILE, JSON.stringify(data, null, 2));
@@ -88,11 +85,11 @@ app.post('/create-payment', async (req, res) => {
             unit_price: amount
         }],
         back_urls: {
-            success: `${req.protocol}://${req.get('host')}/payment-success`, // Crie estas páginas se quiser
+            success: `${req.protocol}://${req.get('host')}/payment-success`,
             failure: `${req.protocol}://${req.get('host')}/payment-failure`,
         },
         auto_return: 'approved',
-        external_reference: apostaId, // Usamos o ID da aposta como referência externa
+        external_reference: apostaId,
     };
 
     try {
@@ -105,8 +102,6 @@ app.post('/create-payment', async (req, res) => {
 });
 
 // --- Rotas do Painel de Administração ---
-
-// Rota para a página de login do admin
 app.get('/admin', (req, res) => {
     res.send(`
         <!DOCTYPE html>
@@ -138,28 +133,23 @@ app.get('/admin', (req, res) => {
     `);
 });
 
-// Rota para processar o login (simplificada, sem sessão por enquanto)
 app.post('/admin/login', bodyParser.urlencoded({ extended: false }), (req, res) => {
     const { username, password } = req.body;
     const data = JSON.parse(fs.readFileSync(DB_FILE));
     if (username === data.admin.user && password === data.admin.pass) {
-        // Redireciona para o painel principal. 
-        // Em uma aplicação real, aqui você criaria uma sessão.
         res.redirect('/admin/dashboard');
     } else {
         res.send('Usuário ou senha inválidos. <a href="/admin">Tentar novamente</a>');
     }
 });
 
-
-// Rota principal do dashboard do admin
 app.get('/admin/dashboard', (req, res) => {
     const data = JSON.parse(fs.readFileSync(DB_FILE));
     
     const activeGamesList = data.jogos.filter(j => j.status === 'ativo').map(game => `
         <li>
             ${game.time_a} vs ${game.time_b} 
-            <form action="/admin/game/finish" method="POST" style="display:inline;">
+            <form action="/admin/game/finish" method="POST" style="display:inline;" class="finish-form">
                 <input type="hidden" name="gameId" value="${game.id}">
                 <input type="text" name="placar" placeholder="Placar (ex: 2x1)" required>
                 <button type="submit">Finalizar Jogo</button>
@@ -209,8 +199,6 @@ app.get('/admin/dashboard', (req, res) => {
     `);
 });
 
-
-// Rota para criar um novo jogo
 app.post('/admin/game/create', bodyParser.urlencoded({ extended: false }), (req, res) => {
     const { time_a, logo_a, time_b, logo_b } = req.body;
     const data = JSON.parse(fs.readFileSync(DB_FILE));
@@ -221,7 +209,7 @@ app.post('/admin/game/create', bodyParser.urlencoded({ extended: false }), (req,
         logo_a,
         time_b,
         logo_b,
-        status: 'ativo', // 'ativo', 'finalizado'
+        status: 'ativo',
         resultado: null
     };
 
@@ -230,7 +218,6 @@ app.post('/admin/game/create', bodyParser.urlencoded({ extended: false }), (req,
     res.redirect('/admin/dashboard');
 });
 
-// Rota para finalizar um jogo
 app.post('/admin/game/finish', bodyParser.urlencoded({ extended: false }), (req, res) => {
     const { gameId, placar } = req.body;
     const data = JSON.parse(fs.readFileSync(DB_FILE));
@@ -238,14 +225,12 @@ app.post('/admin/game/finish', bodyParser.urlencoded({ extended: false }), (req,
     const game = data.jogos.find(j => j.id === gameId);
     if (game) {
         game.status = 'finalizado';
-        game.resultado = placar; // Armazenamos o placar final
+        game.resultado = placar;
         
-        // Lógica para definir vencedores (exemplo simples)
-        // Você precisará expandir isso para os diferentes tipos de aposta
         const [scoreA, scoreB] = placar.split('x').map(Number);
         const vencedor = scoreA > scoreB ? game.time_a : (scoreB > scoreA ? game.time_b : 'Empate');
 
-        const apostasDoJogo = data.apostas.filter(a => a.gameId === gameId && a.status === 'pago'); // Supondo que o status seja 'pago'
+        const apostasDoJogo = data.apostas.filter(a => a.gameId === gameId && a.status === 'pago');
         apostasDoJogo.forEach(aposta => {
             if (aposta.type === 'vencedor' && aposta.choice === vencedor) {
                 aposta.resultado = 'ganhou';
@@ -269,3 +254,4 @@ app.listen(PORT, () => {
     console.log(`Servidor do AgroBet está no ar na porta ${PORT}`);
     console.log(`Painel de Admin: http://localhost:${PORT}/admin`);
 });
+
