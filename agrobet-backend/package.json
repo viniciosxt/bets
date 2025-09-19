@@ -1,21 +1,30 @@
 {
   "name": "agrobet-backend",
   "version": "1.0.0",
-  "description": "Servidor para o site AgroBet",
+  "description": "Servidor para o site de apostas AgroBet",
   "main": "server.js",
   "type": "module",
   "scripts": {
     "start": "node server.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
-  "keywords": [],
-  "author": "",
+  "keywords": [
+    "apostas",
+    "futebol",
+    "backend"
+  ],
+  "author": "Viniciosxt",
   "license": "ISC",
   "dependencies": {
+    "bcryptjs": "^2.4.3",
     "body-parser": "^1.20.2",
+    "cookie-parser": "^1.4.6",
     "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
     "express": "^4.19.2",
-    "mercadopago": "^2.0.10"
+    "jsonwebtoken": "^9.0.2",
+    "mercadopago": "^2.0.10",
+    "mongoose": "^8.4.1"
   }
 }
 
