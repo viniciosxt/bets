@@ -3,7 +3,7 @@ import fs from 'fs';
 import path from 'path';
 import cors from 'cors';
 import bodyParser from 'body-parser';
-import mercadopago from 'mercadopago';
+import { MercadoPagoConfig, Preference } from 'mercadopago'; // Alteração aqui
 import { fileURLToPath } from 'url';
 
 // --- Configuração Inicial para ES Modules ---
@@ -19,9 +19,10 @@ app.use(cors());
 app.use(bodyParser.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
+// --- Configuração do Mercado Pago (NOVO MÉTODO) ---
 // Substitua com o seu Access Token REAL
-mercadopago.configure({
-    access_token: 'SEU_ACCESS_TOKEN_REAL_AQUI' 
+const client = new MercadoPagoConfig({
+    accessToken: 'SEU_ACCESS_TOKEN_REAL_AQUI'
 });
 
 // --- Funções Auxiliares para a Base de Dados ---
@@ -72,7 +73,7 @@ app.post('/create-payment', async (req, res) => {
     data.apostas.push(newBet);
     fs.writeFileSync(DB_FILE, JSON.stringify(data, null, 2));
 
-    const preference = {
+    const preferenceBody = {
         items: [{
             title: `Aposta em ${game.time_a} vs ${game.time_b}`,
             quantity: 1,
@@ -85,8 +86,10 @@ app.post('/create-payment', async (req, res) => {
     };
 
     try {
-        const response = await mercadopago.preferences.create(preference);
-        res.json({ init_point: response.body.init_point });
+        // --- Criação da Preferência (NOVO MÉTODO) ---
+        const preference = new Preference(client);
+        const result = await preference.create({ body: preferenceBody });
+        res.json({ init_point: result.init_point });
     } catch (error) {
         console.error("Erro ao criar preferência no Mercado Pago:", error);
         res.status(500).json({ error: 'Falha ao comunicar com o sistema de pagamento.' });
@@ -137,7 +140,6 @@ app.post('/admin/game/finish', bodyParser.urlencoded({ extended: false }), (req,
     fs.writeFileSync(DB_FILE, JSON.stringify(data, null, 2));
     res.redirect('/admin/dashboard');
 });
-
 
 // --- Inicialização do Servidor ---
 app.listen(PORT, () => {
