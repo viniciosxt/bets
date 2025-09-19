@@ -1,14 +1,19 @@
 {
   "name": "agrobet-backend",
   "version": "1.0.0",
-  "description": "",
+  "description": "Servidor para o site de apostas AgroBet",
   "main": "server.js",
   "type": "module",
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
   },
-  "keywords": [],
-  "author": "",
+  "keywords": [
+    "apostas",
+    "futebol",
+    "backend"
+  ],
+  "author": "Viniciosxt",
   "license": "ISC",
   "dependencies": {
     "bcryptjs": "^2.4.3",
