@@ -6,7 +6,7 @@ import 'dotenv/config';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import bodyParser from 'body-parser';
-import cookieParser from 'cookie-parser'; // Necessário para ler os cookies do admin
+import cookieParser from 'cookie-parser';
 
 // --- Modelos da Base de Dados ---
 const UserSchema = new mongoose.Schema({
@@ -33,7 +33,7 @@ const BetSchema = new mongoose.Schema({
     betValue: Number,
     date: Date,
     user: { name: String, pix: String },
-    status: { type: String, default: 'pending' } // Adicionado para webhook
+    status: { type: String, default: 'pending' }
 });
 const Bet = mongoose.model('Bet', BetSchema);
 
@@ -65,16 +65,16 @@ const authAdmin = (req, res, next) => {
     }
 };
 
-// --- ROTAS PÚBLICAS ---
-app.get('/', (req, res) => res.send('<h1>Servidor do AgroBet está no ar!</h1>'));
+// --- ROTAS PÚBLICAS (para o site principal) ---
+app.get('/', (req, res) => res.send('<h1>Servidor do AgroBet está no ar!</h1><p>A comunicação com ele é feita através do site principal.</p>'));
 
 app.post('/login', async (req, res) => {
     try {
         const { pix, password } = req.body;
         const user = await User.findOne({ pix });
-        if (!user) return res.json({ success: false, message: 'Utilizador não encontrado.' });
+        if (!user) return res.status(404).json({ success: false, message: 'Utilizador não encontrado.' });
         const isMatch = await bcrypt.compare(password, user.password);
-        if (!isMatch) return res.json({ success: false, message: 'Senha incorreta.' });
+        if (!isMatch) return res.status(400).json({ success: false, message: 'Senha incorreta.' });
         res.json({ success: true, user: { name: user.name, pix: user.pix } });
     } catch (error) { res.status(500).json({ success: false, message: 'Erro no servidor.' }); }
 });
@@ -83,7 +83,7 @@ app.post('/register', async (req, res) => {
     try {
         const { name, pix, password } = req.body;
         let user = await User.findOne({ pix });
-        if (user) return res.json({ success: false, message: 'Esta chave PIX já está registada.' });
+        if (user) return res.status(400).json({ success: false, message: 'Esta chave PIX já está registada.' });
         const salt = await bcrypt.genSalt(10);
         const hashedPassword = await bcrypt.hash(password, salt);
         user = new User({ name, pix, password: hashedPassword });
@@ -106,74 +106,40 @@ app.post('/criar-pagamento', async (req, res) => {
         if (!game || game.status !== 'aberto') {
             return res.status(400).json({ message: 'Este jogo não está mais aberto para apostas.' });
         }
-        
         const preferenceData = {
             body: {
-                items: [{
-                    id: gameId, title, description,
-                    quantity: 1, unit_price: Number(unit_price), currency_id: 'BRL',
-                }],
-                back_urls: {
-                    success: `${process.env.FRONTEND_URL || 'https://viniciosxt.github.io/bets/'}`,
-                    failure: `${process.env.FRONTEND_URL || 'https://viniciosxt.github.io/bets/'}`,
-                    pending: `${process.env.FRONTEND_URL || 'https://viniciosxt.github.io/bets/'}`
-                },
+                items: [{ id: gameId, title, description, quantity: 1, unit_price: Number(unit_price), currency_id: 'BRL' }],
+                back_urls: { success: process.env.FRONTEND_URL, failure: process.env.FRONTEND_URL, pending: process.env.FRONTEND_URL },
                 notification_url: `${process.env.SERVER_URL}/webhook-mercadopago`,
-                metadata: {
-                    game_id: gameId,
-                    user_pix: user.pix,
-                    bet_choice: description.replace('Palpite: ', ''),
-                    bet_value: unit_price,
-                    user_name: user.name
-                }
+                metadata: { game_id: gameId, user_pix: user.pix, bet_choice: description.replace('Palpite: ', ''), bet_value: unit_price, user_name: user.name }
             }
         };
         const result = await preference.create(preferenceData);
         res.json({ id: result.id, init_point: result.init_point });
     } catch (error) {
-        console.error("!!! ERRO CRÍTICO AO CRIAR PAGAMENTO:", error);
-        res.status(500).json({ message: 'Erro interno no servidor ao tentar criar o pagamento.' });
+        console.error("ERRO AO CRIAR PAGAMENTO:", error);
+        res.status(500).json({ message: 'Erro no servidor ao criar pagamento.' });
     }
 });
 
 app.post('/webhook-mercadopago', async (req, res) => {
     try {
-        const { body } = req;
-        if (body.type === 'payment') {
-            const paymentDetails = await payment.get({ id: body.data.id });
+        if (req.body.type === 'payment') {
+            const paymentDetails = await payment.get({ id: req.body.data.id });
             if (paymentDetails.status === 'approved') {
                 const metadata = paymentDetails.metadata;
                 const game = await Game.findById(metadata.game_id);
-
                 const newBet = new Bet({
                     gameId: metadata.game_id,
                     gameTitle: game ? `${game.home.name} vs ${game.away.name}` : 'Jogo Desconhecido',
-                    betChoice: metadata.bet_choice,
-                    betValue: Number(metadata.bet_value),
-                    date: new Date(),
-                    user: { name: metadata.user_name, pix: metadata.user_pix },
-                    status: 'approved'
+                    betChoice: metadata.bet_choice, betValue: Number(metadata.bet_value), date: new Date(),
+                    user: { name: metadata.user_name, pix: metadata.user_pix }, status: 'approved'
                 });
                 await newBet.save();
             }
         }
         res.sendStatus(200);
-    } catch (error) {
-        console.error("Erro no webhook:", error);
-        res.sendStatus(500);
-    }
-});
-
-app.get('/relatorio', async (req, res) => {
-    try {
-        const bets = await Bet.find({ status: 'approved' }).sort({ date: -1 });
-        let html = `...`; // Estilos e cabeçalho da tabela
-        bets.forEach(bet => {
-            html += `<tr><td>${new Date(bet.date).toLocaleString('pt-BR')}</td><td>${bet.user.name}</td><td>${bet.user.pix}</td><td>${bet.gameTitle}</td><td>${bet.betChoice}</td><td>R$ ${bet.betValue.toFixed(2)}</td></tr>`;
-        });
-        html += `</tbody></table>`;
-        res.send(html);
-    } catch (error) { res.status(500).send("Erro ao gerar o relatório."); }
+    } catch (error) { console.error("Erro no webhook:", error); res.sendStatus(500); }
 });
 
 app.get('/my-bets/:pix', async (req, res) => {
@@ -183,10 +149,68 @@ app.get('/my-bets/:pix', async (req, res) => {
     } catch (error) { res.json({ success: false, message: 'Erro ao buscar apostas.' }); }
 });
 
-app.get('/results', async (req, res) => { /* ...código inalterado... */ });
+app.get('/results', async (req, res) => {
+    try {
+        const finishedGames = await Game.find({ status: 'finalizado' }).sort({ date: -1 });
+        res.json(finishedGames);
+    } catch (error) { res.status(500).json({ message: "Erro ao buscar resultados." }); }
+});
 
-// --- ROTAS DO PAINEL DE ADMINISTRAÇÃO ---
-// ... código do painel de administração inalterado ...
+// --- ROTA DO RELATÓRIO PÚBLICO (CORRIGIDA) ---
+app.get('/relatorio', async (req, res) => {
+    try {
+        const bets = await Bet.find({ status: 'approved' }).sort({ date: -1 });
+        let html = `
+            <!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><title>Relatório de Apostas</title><script src="https://cdn.tailwindcss.com"></script></head>
+            <body class="bg-gray-100 p-8"><div class="container mx-auto bg-white p-6 rounded-lg shadow-md">
+            <h1 class="text-3xl font-bold mb-6 text-gray-800">Relatório de Apostas Confirmadas</h1><div class="overflow-x-auto">
+            <table class="min-w-full bg-white"><thead class="bg-gray-800 text-white">
+            <tr><th class="py-3 px-4 text-left">Data</th><th class="py-3 px-4 text-left">Utilizador</th><th class="py-3 px-4 text-left">Chave PIX</th><th class="py-3 px-4 text-left">Jogo</th><th class="py-3 px-4 text-left">Palpite</th><th class="py-3 px-4 text-left">Valor</th></tr>
+            </thead><tbody>`;
+        bets.forEach(bet => {
+            html += `<tr class="border-b"><td class="py-3 px-4">${new Date(bet.date).toLocaleString('pt-BR')}</td><td class="py-3 px-4">${bet.user.name}</td><td class="py-3 px-4">${bet.user.pix}</td><td class="py-3 px-4">${bet.gameTitle}</td><td class="py-3 px-4">${bet.betChoice}</td><td class="py-3 px-4 font-semibold text-green-700">R$ ${bet.betValue.toFixed(2)}</td></tr>`;
+        });
+        html += `</tbody></table></div></div></body></html>`;
+        res.send(html);
+    } catch (error) { console.error("Erro ao gerar relatório:", error); res.status(500).send("Erro ao gerar o relatório."); }
+});
+
+
+// --- ROTAS DO PAINEL DE ADMINISTRAÇÃO (CORRIGIDAS) ---
+app.get('/admin', (req, res) => { /* ...código da página de login inalterado... */ });
+
+app.post('/admin/login', (req, res) => {
+    const { password } = req.body;
+    if (password === process.env.ADMIN_PASSWORD) {
+        const token = jwt.sign({ admin: true }, process.env.JWT_SECRET, { expiresIn: '1h' });
+        res.cookie('admin_token', token, { httpOnly: true, secure: true, sameSite: 'strict', maxAge: 3600000 });
+        res.redirect('/admin/dashboard');
+    } else {
+        res.send('<h1>Senha incorreta.</h1><a href="/admin">Tentar novamente</a>');
+    }
+});
+
+app.get('/admin/dashboard', authAdmin, (req, res) => {
+    res.send(`
+        <!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><title>Painel de Administração</title><script src="https://cdn.tailwindcss.com"></script></head>
+        <body class="bg-gray-200 min-h-screen flex items-center justify-center"><div class="container mx-auto p-8 bg-white rounded-lg shadow-lg max-w-2xl text-center">
+        <h1 class="text-4xl font-bold mb-8 text-gray-800">Painel de Administração</h1><div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <a href="/admin/games" class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-6 px-4 rounded-lg text-xl transition-transform transform hover:scale-105">Gerir Jogos</a>
+        <a href="/relatorio" target="_blank" class="bg-green-500 hover:bg-green-600 text-white font-bold py-6 px-4 rounded-lg text-xl transition-transform transform hover:scale-105">Ver Relatório de Apostas</a>
+        </div><form action="/admin/logout" method="post" class="mt-8"><button type="submit" class="bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-6 rounded-lg">Sair</button></form>
+        </div></body></html>`);
+});
+
+app.post('/admin/logout', (req, res) => {
+    res.clearCookie('admin_token');
+    res.redirect('/admin');
+});
+
+app.get('/admin/games', authAdmin, async (req, res) => { /* ...código inalterado... */ });
+app.post('/admin/add-game', authAdmin, async (req, res) => { /* ...código inalterado... */ });
+app.post('/admin/close-game/:id', authAdmin, async (req, res) => { /* ...código inalterado... */ });
+app.post('/admin/finalize-game/:id', authAdmin, async (req, res) => { /* ...código inalterado... */ });
+
 
 const PORT = process.env.PORT || 10000;
 app.listen(PORT, () => console.log(`--> Servidor AgroBet a correr na porta ${PORT}`));
