@@ -39,15 +39,10 @@
         }
         
         @keyframes nature {
-            0% {
-                transform: rotate(0deg);
-            }
-            100% {
-                transform: rotate(360deg);
-            }
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
         }
 
-        /* --- O resto do seu CSS continua aqui... --- */
         .bet-card { transition: all 0.3s ease; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1); }
         .bet-card:hover { transform: translateY(-5px); box-shadow: 0 10px 20px rgba(0, 0, 0, 0.2); }
         .bet-option { transition: all 0.2s ease; }
@@ -63,16 +58,27 @@
         .draw-option { background-color: #f0f0f0; color: #555; font-weight: bold; }
         .draw-option:hover { background-color: #e0e0e0; }
         .draw-option.selected { background-color: #555; color: white; }
+        .modal-backdrop { transition: opacity 0.3s ease; }
+        .modal-content { transition: transform 0.3s ease; }
     </style>
 </head>
 <body>
-    <!-- Header e Main Content (sem alterações) -->
     <header class="nature-bg text-white py-6 relative">
         <div class="container mx-auto px-4 relative z-10">
             <div class="flex justify-between items-center">
                 <div>
                     <h1 class="title-font text-4xl md:text-5xl">AGROBET</h1>
                     <p class="text-sm md:text-base">Apostas Esportivas</p>
+                </div>
+                <div class="flex items-center space-x-4">
+                    <div id="user-display" class="hidden items-center space-x-2 bg-white/20 px-3 py-1 rounded-full">
+                        <i class="fas fa-user"></i>
+                        <span id="user-name-display" class="font-bold"></span>
+                    </div>
+                    <button id="history-btn" class="bg-white text-green-800 px-4 py-2 rounded-full font-bold flex items-center">
+                        <i class="fas fa-history mr-2"></i>
+                        Minhas Apostas
+                    </button>
                 </div>
             </div>
         </div>
@@ -85,152 +91,260 @@
         </div>
     </main>
 
+    <!-- Modal de Coleta de Informações do Usuário -->
+    <div id="user-info-modal" class="modal-backdrop fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 hidden">
+        <div class="modal-content bg-white rounded-lg max-w-sm w-full mx-4 p-6 text-center transform scale-95">
+            <h3 class="title-font text-2xl text-green-800 mb-4">Bem-vindo ao AgroBet!</h3>
+            <p class="mb-6 text-gray-600">Para começar, por favor, informe seus dados. Eles serão usados para o relatório de apostas e para o pagamento de prêmios.</p>
+            <div class="space-y-4">
+                <input type="text" id="user-name-input" placeholder="Seu Nome Completo" class="w-full p-2 border rounded">
+                <input type="text" id="user-pix-input" placeholder="Sua Chave PIX" class="w-full p-2 border rounded">
+            </div>
+            <button id="save-user-info-btn" class="bg-green-800 text-white w-full mt-6 py-2 rounded-md font-bold">Salvar e Começar a Apostar</button>
+        </div>
+    </div>
+
+    <!-- Modal de Histórico de Apostas -->
+    <div id="history-modal" class="modal-backdrop fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 hidden">
+        <div class="modal-content bg-white rounded-lg max-w-lg w-full mx-4 transform scale-95">
+            <div class="flex justify-between items-center bg-green-800 text-white py-3 px-4 rounded-t-lg">
+                <h3 class="title-font text-2xl">RELATÓRIO DE APOSTAS</h3>
+                <button id="history-close-btn" class="text-2xl">&times;</button>
+            </div>
+            <div id="history-content" class="p-6 max-h-[70vh] overflow-y-auto">
+                <!-- Conteúdo do histórico injetado aqui -->
+            </div>
+        </div>
+    </div>
+    
     <!-- Modal de Alerta Customizado -->
-    <div id="alert-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden z-50">
-        <div class="bg-white rounded-lg max-w-sm w-full mx-4 p-6 text-center">
+    <div id="alert-modal" class="modal-backdrop fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden">
+        <div class="modal-content bg-white rounded-lg max-w-sm w-full mx-4 p-6 text-center transform scale-95">
             <p id="alert-message" class="mb-4 text-lg"></p>
             <button id="alert-close-btn" class="bg-green-800 text-white px-6 py-2 rounded-md font-bold">OK</button>
         </div>
     </div>
     
     <script>
-        // Configuração dos jogos
-        const gamesConfig = {
-            1: {
-                home: { name: "ROUNDUP", logo: "https://i.postimg.cc/HsK6qHzZ/roundd.png" },
-                away: { name: "BULDOG", logo: "https://i.postimg.cc/GttjfSyn/roundd-1.png" },
-                date: "15/10/2025 - 20:00",
-                competition: "CAMPEONATO FUTSAL"
-            },
-            2: {
-                home: { name: "CAM", logo: "https://logodownload.org/wp-content/uploads/2016/10/atletico-mineiro-logo-escudo.png" },
-                away: { name: "COR", logo: "https://logodownload.org/wp-content/uploads/2016/11/Corinthians-logo-escudo-1.png" },
-                date: "18/10/2025 - 21:30",
-                competition: "CAMPEONATO FUTSAL"
-            }
-        };
-
-        // Estado da aplicação
-        let currentBet = { game: null, option: null, value: null };
-
-        // Elementos do DOM
-        const gamesContainer = document.getElementById('games-container');
-        const alertModal = document.getElementById('alert-modal');
-        const alertMessage = document.getElementById('alert-message');
-        const alertCloseBtn = document.getElementById('alert-close-btn');
-
-        // Função para mostrar o alerta customizado
-        function showAlert(message) {
-            alertMessage.textContent = message;
-            alertModal.classList.remove('hidden');
-        }
-
-        alertCloseBtn.addEventListener('click', () => alertModal.classList.add('hidden'));
-
-        // --- FUNÇÃO DE PAGAMENTO SEGURA ---
-        // Note que o TOKEN NÃO ESTÁ AQUI.
-        async function handleBet(gameId) {
-            if (!currentBet.game || !currentBet.option || !currentBet.value || currentBet.game !== gameId) {
-                showAlert('Por favor, selecione seu palpite e o valor da aposta para este jogo.');
-                return;
-            }
-
-            const game = gamesConfig[gameId];
-            let betText = currentBet.option === 'home' ? game.home.name : (currentBet.option === 'away' ? game.away.name : 'EMPATE');
-            
-            // Dados que serão enviados para o seu servidor
-            const paymentData = {
-                title: `Aposta no jogo: ${game.home.name} vs ${game.away.name}`,
-                description: `Palpite: ${betText}`,
-                unit_price: currentBet.value
+        document.addEventListener('DOMContentLoaded', () => {
+            // Configuração dos jogos
+            const gamesConfig = {
+                1: {
+                    home: { name: "ROUNDUP", logo: "https://i.postimg.cc/HsK6qHzZ/roundd.png" },
+                    away: { name: "BULDOG", logo: "https://i.postimg.cc/GttjfSyn/roundd-1.png" },
+                    date: "15/10/2025 - 20:00",
+                    competition: "CAMPEONATO FUTSAL"
+                },
+                2: {
+                    home: { name: "CAM", logo: "https://logodownload.org/wp-content/uploads/2016/10/atletico-mineiro-logo-escudo.png" },
+                    away: { name: "COR", logo: "https://logodownload.org/wp-content/uploads/2016/11/Corinthians-logo-escudo-1.png" },
+                    date: "18/10/2025 - 21:30",
+                    competition: "CAMPEONATO FUTSAL"
+                }
             };
 
-            try {
-                // 1. O site envia os dados da aposta para o SEU servidor.
-                const response = await fetch('http://localhost:3000/criar-pagamento', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(paymentData)
-                });
+            // Estado da aplicação
+            let currentBet = { game: null, option: null, value: null };
+            let userInfo = {};
 
-                if (!response.ok) {
-                    throw new Error('Falha ao se comunicar com o servidor.');
+            // Elementos do DOM
+            const gamesContainer = document.getElementById('games-container');
+            const alertModal = document.getElementById('alert-modal');
+            const alertMessage = document.getElementById('alert-message');
+            const alertCloseBtn = document.getElementById('alert-close-btn');
+            const userInfoModal = document.getElementById('user-info-modal');
+            const historyModal = document.getElementById('history-modal');
+            const historyBtn = document.getElementById('history-btn');
+            const historyCloseBtn = document.getElementById('history-close-btn');
+
+            // Funções de Modal genéricas
+            const showModal = (modal) => {
+                modal.classList.remove('hidden');
+                setTimeout(() => modal.querySelector('.modal-content').classList.remove('scale-95'), 10);
+            };
+
+            const hideModal = (modal) => {
+                modal.querySelector('.modal-content').classList.add('scale-95');
+                setTimeout(() => modal.classList.add('hidden'), 300);
+            };
+
+            function showAlert(message) {
+                alertMessage.textContent = message;
+                showModal(alertModal);
+            }
+            alertCloseBtn.addEventListener('click', () => hideModal(alertModal));
+
+            // --- LÓGICA DE USUÁRIO E HISTÓRICO LOCAL ---
+            function checkUserInfo() {
+                const storedUser = localStorage.getItem('agrobetUser');
+                if (storedUser) {
+                    userInfo = JSON.parse(storedUser);
+                    document.getElementById('user-name-display').textContent = userInfo.name;
+                    document.getElementById('user-display').classList.remove('hidden');
+                    document.getElementById('user-display').classList.add('flex');
+                } else {
+                    showModal(userInfoModal);
                 }
-                
-                // 2. O servidor responde com a URL de pagamento do Mercado Pago.
-                const data = await response.json();
-                
-                // 3. O site redireciona o usuário para a página de pagamento.
-                window.location.href = data.init_point;
-
-            } catch (error) {
-                console.error('Erro ao processar aposta:', error);
-                showAlert('Não foi possível iniciar o pagamento. Verifique se o servidor local está rodando.');
             }
-        }
 
-        // Função para renderizar os jogos na tela
-        function renderGames() {
-            let gamesHTML = '';
-            for (const gameId in gamesConfig) {
+            document.getElementById('save-user-info-btn').addEventListener('click', () => {
+                const name = document.getElementById('user-name-input').value.trim();
+                const pix = document.getElementById('user-pix-input').value.trim();
+                if (name && pix) {
+                    userInfo = { name, pix };
+                    localStorage.setItem('agrobetUser', JSON.stringify(userInfo));
+                    document.getElementById('user-name-display').textContent = userInfo.name;
+                    document.getElementById('user-display').classList.remove('hidden');
+                    document.getElementById('user-display').classList.add('flex');
+                    hideModal(userInfoModal);
+                } else {
+                    showAlert('Por favor, preencha todos os campos.');
+                }
+            });
+            
+            // Salva a aposta no histórico LOCAL do usuário
+            function saveBetToLocalHistory() {
+                const game = gamesConfig[currentBet.game];
+                let betText = currentBet.option === 'home' ? game.home.name : (currentBet.option === 'away' ? game.away.name : 'EMPATE');
+
+                const betRecord = {
+                    gameTitle: `${game.home.name} vs ${game.away.name}`,
+                    betChoice: betText,
+                    betValue: currentBet.value,
+                    date: new Date().toLocaleString('pt-BR'),
+                    user: userInfo
+                };
+
+                let history = JSON.parse(localStorage.getItem('agrobetHistory')) || [];
+                history.unshift(betRecord);
+                localStorage.setItem('agrobetHistory', JSON.stringify(history));
+            }
+
+            function displayBetHistory() {
+                const history = JSON.parse(localStorage.getItem('agrobetHistory')) || [];
+                const historyContent = document.getElementById('history-content');
+
+                if (history.length === 0) {
+                    historyContent.innerHTML = `<p class="text-center text-gray-500">Nenhuma aposta encontrada.</p>`;
+                } else {
+                    historyContent.innerHTML = history.map(bet => `
+                        <div class="bg-gray-100 p-4 rounded-lg mb-4 border-l-4 border-green-600">
+                            <div class="flex justify-between items-center mb-2">
+                                <p class="font-bold text-lg text-gray-800">${bet.gameTitle}</p>
+                                <p class="text-sm text-gray-500">${bet.date}</p>
+                            </div>
+                            <p><span class="font-semibold">Meu Palpite:</span> ${bet.betChoice} - <span class="text-green-700 font-bold">R$ ${bet.betValue}</span></p>
+                        </div>
+                    `).join('');
+                }
+                showModal(historyModal);
+            }
+
+            historyBtn.addEventListener('click', displayBetHistory);
+            historyCloseBtn.addEventListener('click', () => hideModal(historyModal));
+
+
+            // --- FUNÇÃO DE PAGAMENTO SEGURA ---
+            async function handleBet(gameId) {
+                if (!currentBet.game || !currentBet.option || !currentBet.value || currentBet.game !== gameId) {
+                    showAlert('Por favor, selecione seu palpite e o valor da aposta para este jogo.');
+                    return;
+                }
+
                 const game = gamesConfig[gameId];
-                gamesHTML += `
-                <div class="bet-card bg-white rounded-lg overflow-hidden border border-gray-200">
-                    <div class="bg-green-800 text-white py-3 px-4">
-                        <h3 class="title-font text-2xl">${game.competition}</h3>
-                        <p class="text-sm">${game.date}</p>
-                    </div>
-                    <div class="p-6">
-                        <div class="flex justify-between items-center mb-6">
-                            <div class="text-center flex-1"><img src="${game.home.logo}" class="team-logo mb-2"><div class="team-name">${game.home.name}</div></div>
-                            <div class="text-2xl font-bold mx-4">VS</div>
-                            <div class="text-center flex-1"><img src="${game.away.logo}" class="team-logo mb-2"><div class="team-name">${game.away.name}</div></div>
-                        </div>
-                        <div class="mb-6">
-                            <h4 class="font-bold mb-3 text-center">ESCOLHA SEU PALPITE:</h4>
-                            <div class="grid grid-cols-3 gap-3">
-                                <button class="bet-option py-2 px-1 border border-green-800 rounded-md font-bold text-green-800" data-game="${gameId}" data-option="home">${game.home.name}</button>
-                                <button class="bet-option draw-option py-2 px-1 border border-gray-400 rounded-md font-bold" data-game="${gameId}" data-option="empate">EMPATE</button>
-                                <button class="bet-option py-2 px-1 border border-green-800 rounded-md font-bold text-green-800" data-game="${gameId}" data-option="away">${game.away.name}</button>
-                            </div>
-                        </div>
-                        <div class="mb-6">
-                            <h4 class="font-bold mb-3 text-center">VALOR DA APOSTA:</h4>
-                            <div class="grid grid-cols-4 gap-3">
-                                <button class="bet-value py-2 border border-green-800 rounded-md font-bold text-green-800" data-game="${gameId}" data-value="5">R$ 5</button>
-                                <button class="bet-value py-2 border border-green-800 rounded-md font-bold text-green-800" data-game="${gameId}" data-value="10">R$ 10</button>
-                                <button class="bet-value py-2 border border-green-800 rounded-md font-bold text-green-800" data-game="${gameId}" data-value="25">R$ 25</button>
-                                <button class="bet-value py-2 border border-green-800 rounded-md font-bold text-green-800" data-game="${gameId}" data-value="50">R$ 50</button>
-                            </div>
-                        </div>
-                        <button class="confirm-btn w-full py-3 rounded-md text-white font-bold" data-game="${gameId}">APOSTAR</button>
-                    </div>
-                </div>`;
+                let betText = currentBet.option === 'home' ? game.home.name : (currentBet.option === 'away' ? game.away.name : 'EMPATE');
+                
+                // Agora enviamos os dados do usuário para o servidor
+                const paymentData = {
+                    title: `Aposta no jogo: ${game.home.name} vs ${game.away.name}`,
+                    description: `Palpite: ${betText}`,
+                    unit_price: currentBet.value,
+                    user: userInfo // << NOVO: Enviando dados do usuário
+                };
+
+                try {
+                    const response = await fetch('http://localhost:3000/criar-pagamento', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(paymentData)
+                    });
+
+                    if (!response.ok) throw new Error('Falha ao se comunicar com o servidor.');
+                    
+                    const data = await response.json();
+                    
+                    saveBetToLocalHistory(); // Salva a aposta no histórico local ANTES de redirecionar
+                    
+                    window.location.href = data.init_point;
+
+                } catch (error) {
+                    console.error('Erro ao processar aposta:', error);
+                    showAlert('Não foi possível iniciar o pagamento. Verifique se o servidor local está rodando.');
+                }
             }
-            gamesContainer.innerHTML = gamesHTML;
-            initializeEventListeners();
-        }
 
-        // Função para adicionar os eventos de clique
-        function initializeEventListeners() {
-            document.querySelectorAll('.bet-option').forEach(btn => btn.addEventListener('click', function() {
-                document.querySelectorAll(`.bet-option[data-game="${this.dataset.game}"]`).forEach(el => el.classList.remove('selected'));
-                this.classList.add('selected');
-                currentBet.game = this.dataset.game;
-                currentBet.option = this.dataset.option;
-            }));
-            document.querySelectorAll('.bet-value').forEach(btn => btn.addEventListener('click', function() {
-                document.querySelectorAll(`.bet-value[data-game="${this.dataset.game}"]`).forEach(el => el.classList.remove('selected'));
-                this.classList.add('selected');
-                currentBet.value = this.dataset.value;
-            }));
-            document.querySelectorAll('.confirm-btn').forEach(btn => btn.addEventListener('click', function() {
-                handleBet(this.dataset.game);
-            }));
-        }
+            // Função para renderizar os jogos na tela
+            function renderGames() {
+                let gamesHTML = '';
+                for (const gameId in gamesConfig) {
+                    const game = gamesConfig[gameId];
+                    gamesHTML += `
+                    <div class="bet-card bg-white rounded-lg overflow-hidden border border-gray-200">
+                        <div class="bg-green-800 text-white py-3 px-4">
+                            <h3 class="title-font text-2xl">${game.competition}</h3>
+                            <p class="text-sm">${game.date}</p>
+                        </div>
+                        <div class="p-6">
+                            <div class="flex justify-between items-center mb-6">
+                                <div class="text-center flex-1"><img src="${game.home.logo}" class="team-logo mb-2"><div class="team-name">${game.home.name}</div></div>
+                                <div class="text-2xl font-bold mx-4">VS</div>
+                                <div class="text-center flex-1"><img src="${game.away.logo}" class="team-logo mb-2"><div class="team-name">${game.away.name}</div></div>
+                            </div>
+                            <div class="mb-6">
+                                <h4 class="font-bold mb-3 text-center">ESCOLHA SEU PALPITE:</h4>
+                                <div class="grid grid-cols-3 gap-3">
+                                    <button class="bet-option py-2 px-1 border border-green-800 rounded-md font-bold text-green-800" data-game="${gameId}" data-option="home">${game.home.name}</button>
+                                    <button class="bet-option draw-option py-2 px-1 border border-gray-400 rounded-md font-bold" data-game="${gameId}" data-option="empate">EMPATE</button>
+                                    <button class="bet-option py-2 px-1 border border-green-800 rounded-md font-bold text-green-800" data-game="${gameId}" data-option="away">${game.away.name}</button>
+                                </div>
+                            </div>
+                            <div class="mb-6">
+                                <h4 class="font-bold mb-3 text-center">VALOR DA APOSTA:</h4>
+                                <div class="grid grid-cols-4 gap-3">
+                                    <button class="bet-value py-2 border border-green-800 rounded-md font-bold text-green-800" data-game="${gameId}" data-value="5">R$ 5</button>
+                                    <button class="bet-value py-2 border border-green-800 rounded-md font-bold text-green-800" data-game="${gameId}" data-value="10">R$ 10</button>
+                                    <button class="bet-value py-2 border border-green-800 rounded-md font-bold text-green-800" data-game="${gameId}" data-value="25">R$ 25</button>
+                                    <button class="bet-value py-2 border border-green-800 rounded-md font-bold text-green-800" data-game="${gameId}" data-value="50">R$ 50</button>
+                                </div>
+                            </div>
+                            <button class="confirm-btn w-full py-3 rounded-md text-white font-bold" data-game="${gameId}">APOSTAR</button>
+                        </div>
+                    </div>`;
+                }
+                gamesContainer.innerHTML = gamesHTML;
+                initializeEventListeners();
+            }
 
-        // Inicia a aplicação
-        renderGames();
+            function initializeEventListeners() {
+                document.querySelectorAll('.bet-option').forEach(btn => btn.addEventListener('click', function() {
+                    document.querySelectorAll(`.bet-option[data-game="${this.dataset.game}"]`).forEach(el => el.classList.remove('selected'));
+                    this.classList.add('selected');
+                    currentBet.game = this.dataset.game;
+                    currentBet.option = this.dataset.option;
+                }));
+                document.querySelectorAll('.bet-value').forEach(btn => btn.addEventListener('click', function() {
+                    document.querySelectorAll(`.bet-value[data-game="${this.dataset.game}"]`).forEach(el => el.classList.remove('selected'));
+                    this.classList.add('selected');
+                    currentBet.value = this.dataset.value;
+                }));
+                document.querySelectorAll('.confirm-btn').forEach(btn => btn.addEventListener('click', function() {
+                    handleBet(this.dataset.game);
+                }));
+            }
+
+            renderGames();
+            checkUserInfo();
+        });
     </script>
 </body>
 </html>
