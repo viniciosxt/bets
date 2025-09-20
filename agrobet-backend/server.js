@@ -49,7 +49,8 @@ const Bet = mongoose.model('Bet', BetSchema);
 // --- Conexão e Configuração do Servidor ---
 mongoose.connect(process.env.MONGODB_URI).then(() => console.log("MongoDB conectado.")).catch(err => console.error(err));
 const app = express();
-app.use(cors({ origin: process.env.FRONTEND_URL, credentials: true }));
+// CORREÇÃO: Permitir explicitamente a origem do site no GitHub
+app.use(cors({ origin: 'https://viniciosxt.github.io', credentials: true }));
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(cookieParser());
@@ -127,7 +128,7 @@ app.post('/criar-pagamento', async (req, res) => {
                     unit_price: Number(value),
                     currency_id: 'BRL'
                 }],
-                back_urls: { success: process.env.FRONTEND_URL, failure: process.env.FRONTEND_URL, pending: process.env.FRONTEND_URL },
+                back_urls: { success: process.env.FRONTEND_URL || 'https://viniciosxt.github.io', failure: process.env.FRONTEND_URL || 'https://viniciosxt.github.io', pending: process.env.FRONTEND_URL || 'https://viniciosxt.github.io' },
                 notification_url: `${process.env.SERVER_URL}/webhook-mercadopago`,
                 metadata: {
                     game_id: gameId,
@@ -301,7 +302,6 @@ app.post('/admin/add-game', authAdmin, async (req, res) => {
         const implied_draw = p_draw / 100;
         const implied_away = p_away / 100;
         
-        const total_implied = implied_home + implied_draw + implied_away;
         const odds_home = (1 / (implied_home * (1 - VIGORISH))).toFixed(2);
         const odds_draw = (1 / (implied_draw * (1 - VIGORISH))).toFixed(2);
         const odds_away = (1 / (implied_away * (1 - VIGORISH))).toFixed(2);
