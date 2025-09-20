@@ -99,7 +99,7 @@
 
         async function loadOpenGames() {
             try {
-                const response = await fetch(`${SERVER_URL}/games`);
+                const response = await fetch(`${SERVER_URL}/games`, { credentials: 'include' });
                 const games = await response.json();
                 allGames = games;
                 gamesContainer.innerHTML = games.length === 0 ? '<p class="text-center text-gray-500 col-span-2">Nenhum jogo aberto para apostas.</p>' : '';
@@ -137,7 +137,7 @@
 
         async function loadResults() {
              try {
-                const response = await fetch(`${SERVER_URL}/results`);
+                const response = await fetch(`${SERVER_URL}/results`, { credentials: 'include' });
                 const results = await response.json();
                 resultsContainer.innerHTML = results.length === 0 ? '<p class="text-center text-gray-500">Ainda não há resultados de jogos anteriores.</p>' : '';
                 results.forEach(game => {
@@ -214,7 +214,8 @@
                 const response = await fetch(`${SERVER_URL}/criar-pagamento`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(betData)
+                    body: JSON.stringify(betData),
+                    credentials: 'include'
                 });
                 if (!response.ok) {
                     const err = await response.json();
@@ -243,7 +244,12 @@
             const body = isRegisterMode ? { name, pix, password } : { pix, password };
 
             try {
-                const response = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+                const response = await fetch(url, { 
+                    method: 'POST', 
+                    headers: { 'Content-Type': 'application/json' }, 
+                    body: JSON.stringify(body),
+                    credentials: 'include'
+                });
                 const data = await response.json();
                 if (data.success) { loginSuccess(data.user); } 
                 else { showError(data.message || 'Ocorreu um erro.'); }
@@ -285,7 +291,7 @@
             listElement.innerHTML = '<p class="text-gray-500">A carregar apostas...</p>';
             myBetsModal.classList.remove('hidden');
             try {
-                const response = await fetch(`${SERVER_URL}/my-bets/${currentUser.pix}`);
+                const response = await fetch(`${SERVER_URL}/my-bets/${currentUser.pix}`, { credentials: 'include' });
                 const data = await response.json();
                 if (data.success) {
                     if (data.bets.length === 0) {
