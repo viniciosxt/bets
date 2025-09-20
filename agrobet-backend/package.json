@@ -5,8 +5,14 @@
   "main": "server.js",
   "type": "module",
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
   },
+  "keywords": [
+    "apostas",
+    "futebol",
+    "backend"
+  ],
   "author": "Viniciosxt",
   "license": "ISC",
   "dependencies": {
@@ -21,3 +27,4 @@
     "mongoose": "^8.4.1"
   }
 }
+
