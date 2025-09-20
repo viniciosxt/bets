@@ -33,15 +33,11 @@
     <main class="container mx-auto px-4 py-8">
         <section id="open-games-section">
             <h2 class="title-font text-3xl md:text-4xl text-green-800 mb-8 text-center">JOGOS DISPONÍVEIS</h2>
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-8" id="games-container">
-                <!-- Jogos com odds carregados aqui -->
-            </div>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-8" id="games-container"></div>
         </section>
         <section id="results-section" class="mt-16">
             <h2 class="title-font text-3xl md:text-4xl text-gray-700 mb-8 text-center">RESULTADOS ANTERIORES</h2>
-            <div class="space-y-4" id="results-container">
-                <!-- Resultados carregados aqui -->
-            </div>
+            <div class="space-y-4" id="results-container"></div>
         </section>
     </main>
 
@@ -244,12 +240,7 @@
             const body = isRegisterMode ? { name, pix, password } : { pix, password };
 
             try {
-                const response = await fetch(url, { 
-                    method: 'POST', 
-                    headers: { 'Content-Type': 'application/json' }, 
-                    body: JSON.stringify(body),
-                    credentials: 'include'
-                });
+                const response = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), credentials: 'include' });
                 const data = await response.json();
                 if (data.success) { loginSuccess(data.user); } 
                 else { showError(data.message || 'Ocorreu um erro.'); }
