@@ -42,9 +42,34 @@
     </main>
 
     <!-- Modals -->
-    <div id="login-modal" class="modal fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50">...</div>
-    <div id="my-bets-modal" class="modal fixed hidden inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50">...</div>
-    <div id="loading-modal" class="modal fixed hidden inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50">...</div>
+    <div id="login-modal" class="modal fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50">
+        <div class="bg-white rounded-lg p-8 max-w-sm w-full mx-4">
+            <h3 id="login-title" class="title-font text-2xl text-center mb-4 text-green-800">Login</h3>
+            <div class="space-y-4">
+                <div id="name-field" style="display: none;"><input type="text" id="user-name-input" placeholder="Seu Nome Completo" class="w-full px-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-green-500"></div>
+                <input type="text" id="user-pix-input" placeholder="Sua Chave PIX" class="w-full px-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-green-500">
+                <input type="password" id="user-password-input" placeholder="Sua Senha" class="w-full px-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-green-500">
+            </div>
+            <p id="login-error" class="text-red-500 text-sm text-center mt-2 h-4"></p>
+            <button id="action-btn" class="w-full mt-4 py-3 confirm-btn text-white font-bold rounded-md">Entrar</button>
+            <p class="text-center text-sm mt-4"><a href="#" id="switch-mode-link" class="text-green-600 hover:underline">Não tem uma conta? Registe-se</a></p>
+        </div>
+    </div>
+    <div id="my-bets-modal" class="modal fixed hidden inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50">
+         <div class="bg-white rounded-lg p-6 max-w-2xl w-full mx-4 max-h-[80vh] overflow-y-auto">
+             <div class="flex justify-between items-center mb-4">
+                 <h3 class="title-font text-2xl text-green-800">Minhas Apostas Confirmadas</h3>
+                 <button id="close-my-bets" class="text-gray-500 hover:text-gray-800 text-2xl">&times;</button>
+             </div>
+             <div id="my-bets-list" class="space-y-3"></div>
+         </div>
+    </div>
+    <div id="loading-modal" class="modal fixed hidden inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50">
+        <div class="bg-white rounded-lg p-8 text-center">
+            <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-green-800 mx-auto mb-4"></div>
+            <p class="text-lg font-semibold">A processar...</p>
+        </div>
+    </div>
 
     <script>
         const SERVER_URL = 'https://agrobets.onrender.com';
@@ -52,8 +77,22 @@
         let isRegisterMode = false;
         let allGames = [];
 
+        // --- ELEMENTOS DO DOM ---
         const gamesContainer = document.getElementById('games-container');
-        
+        const resultsContainer = document.getElementById('results-container');
+        const loginModal = document.getElementById('login-modal');
+        const myBetsModal = document.getElementById('my-bets-modal');
+        const loadingModal = document.getElementById('loading-modal');
+        const actionBtn = document.getElementById('action-btn');
+        const switchModeLink = document.getElementById('switch-mode-link');
+        const pixInput = document.getElementById('user-pix-input');
+        const nameInput = document.getElementById('user-name-input');
+        const passwordInput = document.getElementById('user-password-input');
+        const nameField = document.getElementById('name-field');
+        const loginError = document.getElementById('login-error');
+        const loginTitle = document.getElementById('login-title');
+        const logoutBtn = document.getElementById('logout-btn');
+
         async function loadOpenGames() {
             try {
                 const response = await fetch(`${SERVER_URL}/games`);
@@ -65,7 +104,7 @@
                     <div class="bet-card bg-white rounded-lg shadow-md border border-gray-200 overflow-hidden" data-game-id="${game._id}">
                         <div class="bg-green-800 text-white py-2 px-4 flex justify-between items-center"><h3 class="title-font text-xl">${game.competition}</h3><div class="text-sm bg-white text-green-800 font-bold px-3 py-1 rounded-full">${game.date}</div></div>
                         <div class="p-6">
-                            <div class="flex justify-around items-center mb-6"><div class="text-center w-1/3"><img src="${game.home.logo}" class="h-16 mx-auto mb-2"><span class="font-bold">${game.home.name}</span></div><div class="text-2xl font-bold text-gray-400">VS</div><div class="text-center w-1/3"><img src="${game.away.logo}" class="h-16 mx-auto mb-2"><span class="font-bold">${game.away.name}</span></div></div>
+                            <div class="flex justify-around items-center mb-6"><div class="text-center w-1/3"><img src="${game.home.logo}" class="h-16 mx-auto mb-2" onerror="this.onerror=null;this.src='https://placehold.co/64x64/e2e8f0/e2e8f0?text=...';"><span class="font-bold">${game.home.name}</span></div><div class="text-2xl font-bold text-gray-400">VS</div><div class="text-center w-1/3"><img src="${game.away.logo}" class="h-16 mx-auto mb-2" onerror="this.onerror=null;this.src='https://placehold.co/64x64/e2e8f0/e2e8f0?text=...';"><span class="font-bold">${game.away.name}</span></div></div>
                             <div class="mb-4">
                                 <h4 class="font-bold mb-2 text-center text-gray-700">PALPITE:</h4>
                                 <div class="grid grid-cols-3 gap-2 bet-options">
@@ -86,7 +125,38 @@
                     </div>`;
                 });
                 addGameEventListeners();
-            } catch (error) { console.error("Erro ao carregar jogos:", error); }
+            } catch (error) { 
+                console.error("Erro ao carregar jogos:", error);
+                gamesContainer.innerHTML = '<p class="text-center text-red-500 col-span-2">Não foi possível carregar os jogos. O servidor pode estar a iniciar. Tente recarregar a página em alguns segundos.</p>';
+            }
+        }
+
+        async function loadResults() {
+             try {
+                const response = await fetch(`${SERVER_URL}/results`);
+                const results = await response.json();
+                resultsContainer.innerHTML = results.length === 0 ? '<p class="text-center text-gray-500">Ainda não há resultados de jogos anteriores.</p>' : '';
+                results.forEach(game => {
+                    let winnerText = '';
+                    if (game.result === 'empate') {
+                        winnerText = `<span class="font-bold text-blue-600">EMPATE</span>`;
+                    } else {
+                        const winnerName = game.result === 'home' ? game.home.name : game.away.name;
+                        winnerText = `Vencedor: <span class="font-bold text-green-600">${winnerName.toUpperCase()}</span>`;
+                    }
+                    resultsContainer.innerHTML += `
+                        <div class="bg-white p-4 rounded-lg shadow-sm border flex items-center justify-between">
+                            <div>
+                                <p class="font-bold text-gray-800">${game.home.name} vs ${game.away.name}</p>
+                                <p class="text-sm text-gray-500">${game.competition} - ${game.date}</p>
+                            </div>
+                            <div class="text-right text-lg">${winnerText}</div>
+                        </div>`;
+                });
+            } catch (error) {
+                console.error("Erro ao carregar resultados:", error);
+                resultsContainer.innerHTML = '<p class="text-center text-red-500">Não foi possível carregar os resultados.</p>';
+            }
         }
 
         function addGameEventListeners() {
@@ -130,11 +200,131 @@
         }
 
         async function handleBet(gameId, option, value) {
+            if (!currentUser) {
+                alert("Por favor, faça login para apostar.");
+                return;
+            }
+            loadingModal.classList.remove('hidden');
             const betData = { gameId, option, value, user: currentUser };
-            // ... (resto da lógica de fetch inalterada)
+            try {
+                const response = await fetch(`${SERVER_URL}/criar-pagamento`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(betData)
+                });
+                if (!response.ok) {
+                    const err = await response.json();
+                    throw new Error(err.message || 'A resposta do servidor não foi OK.');
+                }
+                const data = await response.json();
+                window.location.href = data.init_point;
+            } catch (error) {
+                loadingModal.classList.add('hidden');
+                alert(`Não foi possível iniciar o pagamento: ${error.message}.`);
+                console.error("Erro ao criar pagamento:", error);
+            }
         }
         
-        // ... (resto do script, incluindo loadResults, auth, etc.)
+        async function handleAuthAction() {
+            const pix = pixInput.value.trim();
+            const password = passwordInput.value.trim();
+            const name = nameInput.value.trim();
+            showError('');
+            if (!pix || !password || (isRegisterMode && !name)) { return showError("Por favor, preencha todos os campos."); }
+
+            loadingModal.querySelector('p').textContent = 'A processar...';
+            loadingModal.classList.remove('hidden');
+
+            const url = isRegisterMode ? `${SERVER_URL}/register` : `${SERVER_URL}/login`;
+            const body = isRegisterMode ? { name, pix, password } : { pix, password };
+
+            try {
+                const response = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+                const data = await response.json();
+                if (data.success) { loginSuccess(data.user); } 
+                else { showError(data.message || 'Ocorreu um erro.'); }
+            } catch (err) { showError("Erro de comunicação com o servidor."); } 
+            finally { loadingModal.classList.add('hidden'); }
+        }
+        
+        function loginSuccess(user) {
+            currentUser = user;
+            localStorage.setItem('agrobetUser', JSON.stringify(currentUser));
+            document.getElementById('user-name-display').textContent = currentUser.name.split(' ')[0];
+            document.getElementById('user-info').classList.remove('hidden');
+            logoutBtn.classList.remove('hidden');
+            loginModal.style.display = 'none';
+        }
+
+        function logout() {
+            currentUser = null;
+            localStorage.removeItem('agrobetUser');
+            document.getElementById('user-info').classList.add('hidden');
+            logoutBtn.classList.add('hidden');
+            loginModal.style.display = 'flex';
+        }
+
+        function showError(message) { loginError.textContent = message; }
+
+        function checkStoredUser() {
+            const storedUser = localStorage.getItem('agrobetUser');
+            if (storedUser) {
+                loginSuccess(JSON.parse(storedUser));
+            } else {
+                loginModal.style.display = 'flex';
+            }
+        }
+        
+        async function displayMyBets() {
+            if (!currentUser) return;
+            const listElement = document.getElementById('my-bets-list');
+            listElement.innerHTML = '<p class="text-gray-500">A carregar apostas...</p>';
+            myBetsModal.classList.remove('hidden');
+            try {
+                const response = await fetch(`${SERVER_URL}/my-bets/${currentUser.pix}`);
+                const data = await response.json();
+                if (data.success) {
+                    if (data.bets.length === 0) {
+                        listElement.innerHTML = '<p class="text-gray-500">Ainda não tem nenhuma aposta confirmada.</p>';
+                        return;
+                    }
+                    listElement.innerHTML = data.bets.map(bet => `
+                        <div class="border rounded-md p-3 bg-gray-50">
+                            <p class="font-bold">${bet.gameTitle}</p>
+                            <p>Palpite: ${bet.betChoice} - <span class="font-bold text-green-600">R$ ${Number(bet.betValue).toFixed(2)}</span> (Odd: ${bet.odds.toFixed(2)})</p>
+                            <p class="font-bold">Retorno Potencial: R$ ${bet.potentialPayout.toFixed(2)}</p>
+                            <p class="text-sm text-gray-500">${new Date(bet.date).toLocaleString('pt-BR')}</p>
+                        </div>
+                    `).join('');
+                } else {
+                    listElement.innerHTML = `<p class="text-red-500">${data.message}</p>`;
+                }
+            } catch (error) {
+                listElement.innerHTML = '<p class="text-red-500">Não foi possível carregar as suas apostas.</p>';
+            }
+        }
+
+        function toggleMode() {
+            isRegisterMode = !isRegisterMode;
+            showError('');
+            loginTitle.textContent = isRegisterMode ? 'Registo' : 'Login';
+            actionBtn.textContent = isRegisterMode ? 'Registar' : 'Entrar';
+            switchModeLink.textContent = isRegisterMode ? 'Já tem uma conta? Entre' : 'Não tem uma conta? Registe-se';
+            nameField.style.display = isRegisterMode ? 'block' : 'none';
+        }
+        
+        document.addEventListener('DOMContentLoaded', () => {
+            actionBtn.addEventListener('click', handleAuthAction);
+            switchModeLink.addEventListener('click', (e) => { e.preventDefault(); toggleMode(); });
+            logoutBtn.addEventListener('click', logout);
+            document.getElementById('my-bets-btn').addEventListener('click', displayMyBets);
+            document.getElementById('close-my-bets').addEventListener('click', () => { myBetsModal.classList.add('hidden'); });
+
+            loadOpenGames();
+            loadResults();
+            checkStoredUser();
+        });
     </script>
 </body>
 </html>
+
