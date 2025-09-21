@@ -10,12 +10,9 @@
         @import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Montserrat:wght@400;700&display=swap');
         body { font-family: 'Montserrat', sans-serif; background-color: #f8f8f8; }
         .title-font { font-family: 'Bebas Neue', cursive; }
-        .bet-card, .bet-option, .confirm-btn, .modal { transition: all 0.3s ease; }
-        .bet-card:hover { transform: translateY(-5px); box-shadow: 0 10px 20px rgba(0, 0, 0, 0.15); }
-        .bet-option.selected, .bet-value.selected { background-color: #1b5e20; color: white; border-color: #1b5e20; }
-        .confirm-btn { background: linear-gradient(135deg, #2e7d32 0%, #1b5e20 100%); }
-        .confirm-btn:hover { transform: translateY(-2px); box-shadow: 0 5px 15px rgba(46, 125, 0.4); }
-        .hidden-field { display: none; }
+        .bet-option.selected { background-color: #1b5e20; color: white; border-color: #1b5e20; }
+        .confirm-btn { background: linear-gradient(135deg, #2e7d32 0%, #1b5e20 100%); transition: all 0.3s ease; }
+        .confirm-btn:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 5px 15px rgba(46, 125, 0.4); }
     </style>
 </head>
 <body class="bg-gray-100">
@@ -23,20 +20,11 @@
     <!-- Header -->
     <header class="bg-green-800 text-white py-4 shadow-md sticky top-0 z-40">
         <div class="container mx-auto px-4 flex justify-between items-center">
-            <div>
-                <h1 class="title-font text-4xl">AGROBET</h1>
-                <p class="text-sm">Apostas Esportivas</p>
-            </div>
+            <div><h1 class="title-font text-4xl">AGROBET</h1><p class="text-sm">Apostas Esportivas</p></div>
             <div class="flex items-center space-x-4">
-                <div id="user-info" class="text-right hidden">
-                    <p class="font-bold text-lg">Olá, <span id="user-name-display"></span>!</p>
-                </div>
-                 <button id="logout-btn" class="hidden bg-red-600 text-white px-3 py-1 rounded-full text-xs font-bold hover:bg-red-700 transition">
-                    Sair
-                </button>
-                <button id="my-bets-btn" class="bg-white text-green-800 px-4 py-2 rounded-full font-bold flex items-center hover:bg-gray-200 transition">
-                    <i class="fas fa-receipt mr-2"></i>Minhas Apostas
-                </button>
+                <div id="user-info" class="text-right hidden"><p class="font-bold text-lg">Olá, <span id="user-name-display"></span>!</p></div>
+                <button id="logout-btn" class="hidden bg-red-600 text-white px-3 py-1 rounded-full text-xs font-bold hover:bg-red-700 transition">Sair</button>
+                <button id="my-bets-btn" class="bg-white text-green-800 px-4 py-2 rounded-full font-bold flex items-center hover:bg-gray-200 transition"><i class="fas fa-receipt mr-2"></i>Minhas Apostas</button>
             </div>
         </div>
     </header>
@@ -44,33 +32,43 @@
     <!-- Main Content -->
     <main class="container mx-auto px-4 py-8">
         <section id="open-games-section">
-            <h2 class="title-font text-3xl md:text-4xl text-green-800 mb-8 text-center">JOGOS DISPONÍVEIS PARA APOSTAR</h2>
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-8" id="games-container">
-                <!-- Jogos abertos carregados aqui -->
-            </div>
+            <h2 class="title-font text-3xl md:text-4xl text-green-800 mb-8 text-center">JOGOS DISPONÍVEIS</h2>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-8" id="games-container"></div>
         </section>
-
         <section id="results-section" class="mt-16">
             <h2 class="title-font text-3xl md:text-4xl text-gray-700 mb-8 text-center">RESULTADOS ANTERIORES</h2>
-            <div class="space-y-4" id="results-container">
-                <!-- Resultados carregados aqui -->
-            </div>
+            <div class="space-y-4" id="results-container"></div>
         </section>
     </main>
 
-    <!-- Login/Register Modal (sem alterações) -->
+    <!-- Modals -->
     <div id="login-modal" class="modal fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50">
-        <div class="bg-white rounded-lg p-8 max-w-sm w-full mx-4"><h3 id="login-title" class="title-font text-2xl text-center mb-4 text-green-800">Login</h3><div class="space-y-4"><div id="name-field" class="hidden-field"><input type="text" id="user-name-input" placeholder="Seu Nome Completo" class="w-full px-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-green-500"></div><input type="text" id="user-pix-input" placeholder="Sua Chave PIX" class="w-full px-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-green-500"><input type="password" id="user-password-input" placeholder="Sua Senha" class="w-full px-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-green-500"></div><p id="login-error" class="text-red-500 text-sm text-center mt-2 h-4"></p><button id="action-btn" class="w-full mt-4 py-3 confirm-btn text-white font-bold rounded-md">Entrar</button><p class="text-center text-sm mt-4"><a href="#" id="switch-mode-link" class="text-green-600 hover:underline">Não tem uma conta? Registe-se</a></p></div>
+        <div class="bg-white rounded-lg p-8 max-w-sm w-full mx-4">
+            <h3 id="login-title" class="title-font text-2xl text-center mb-4 text-green-800">Login</h3>
+            <div class="space-y-4">
+                <div id="name-field" style="display: none;"><input type="text" id="user-name-input" placeholder="Seu Nome Completo" class="w-full px-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-green-500"></div>
+                <input type="text" id="user-pix-input" placeholder="Sua Chave PIX" class="w-full px-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-green-500">
+                <input type="password" id="user-password-input" placeholder="Sua Senha" class="w-full px-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-green-500">
+            </div>
+            <p id="login-error" class="text-red-500 text-sm text-center mt-2 h-4"></p>
+            <button id="action-btn" class="w-full mt-4 py-3 confirm-btn text-white font-bold rounded-md">Entrar</button>
+            <p class="text-center text-sm mt-4"><a href="#" id="switch-mode-link" class="text-green-600 hover:underline">Não tem uma conta? Registe-se</a></p>
+        </div>
     </div>
-    
-    <!-- My Bets Modal (sem alterações) -->
     <div id="my-bets-modal" class="modal fixed hidden inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50">
-         <div class="bg-white rounded-lg p-6 max-w-2xl w-full mx-4 max-h-[80vh] overflow-y-auto"><div class="flex justify-between items-center mb-4"><h3 class="title-font text-2xl text-green-800">Minhas Apostas Confirmadas</h3><button id="close-my-bets" class="text-gray-500 hover:text-gray-800 text-2xl">&times;</button></div><div id="my-bets-list" class="space-y-3"></div></div>
+         <div class="bg-white rounded-lg p-6 max-w-2xl w-full mx-4 max-h-[80vh] overflow-y-auto">
+             <div class="flex justify-between items-center mb-4">
+                 <h3 class="title-font text-2xl text-green-800">Minhas Apostas Confirmadas</h3>
+                 <button id="close-my-bets" class="text-gray-500 hover:text-gray-800 text-2xl">&times;</button>
+             </div>
+             <div id="my-bets-list" class="space-y-3"></div>
+         </div>
     </div>
-
-     <!-- Loading Modal (sem alterações) -->
     <div id="loading-modal" class="modal fixed hidden inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50">
-        <div class="bg-white rounded-lg p-8 text-center"><div class="animate-spin rounded-full h-12 w-12 border-b-2 border-green-800 mx-auto mb-4"></div><p class="text-lg font-semibold">A processar...</p></div>
+        <div class="bg-white rounded-lg p-8 text-center">
+            <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-green-800 mx-auto mb-4"></div>
+            <p class="text-lg font-semibold">A processar...</p>
+        </div>
     </div>
 
     <script>
@@ -79,6 +77,7 @@
         let isRegisterMode = false;
         let allGames = [];
 
+        // --- ELEMENTOS DO DOM ---
         const gamesContainer = document.getElementById('games-container');
         const resultsContainer = document.getElementById('results-container');
         const loginModal = document.getElementById('login-modal');
@@ -96,43 +95,47 @@
 
         async function loadOpenGames() {
             try {
-                const response = await fetch(`${SERVER_URL}/games`);
+                const response = await fetch(`${SERVER_URL}/games`, { credentials: 'include' });
                 const games = await response.json();
-                allGames = games; // Guardar jogos para consulta posterior
-                gamesContainer.innerHTML = '';
-                if (games.length === 0) {
-                    gamesContainer.innerHTML = '<p class="text-center text-gray-500 col-span-1 md:col-span-2">Nenhum jogo aberto para apostas no momento.</p>';
-                    return;
-                }
+                allGames = games;
+                gamesContainer.innerHTML = games.length === 0 ? '<p class="text-center text-gray-500 col-span-2">Nenhum jogo aberto para apostas.</p>' : '';
                 games.forEach(game => {
-                    const gameId = game._id;
                     gamesContainer.innerHTML += `
-                    <div class="bet-card bg-white rounded-lg shadow-md border border-gray-200 overflow-hidden" data-game-id="${gameId}">
+                    <div class="bet-card bg-white rounded-lg shadow-md border border-gray-200 overflow-hidden" data-game-id="${game._id}">
                         <div class="bg-green-800 text-white py-2 px-4 flex justify-between items-center"><h3 class="title-font text-xl">${game.competition}</h3><div class="text-sm bg-white text-green-800 font-bold px-3 py-1 rounded-full">${game.date}</div></div>
                         <div class="p-6">
-                            <div class="flex justify-around items-center mb-6"><div class="text-center w-1/3"><img src="${game.home.logo}" class="h-16 mx-auto mb-2"><span class="font-bold">${game.home.name}</span></div><div class="text-2xl font-bold text-gray-400">VS</div><div class="text-center w-1/3"><img src="${game.away.logo}" class="h-16 mx-auto mb-2"><span class="font-bold">${game.away.name}</span></div></div>
-                            <div class="mb-4"><h4 class="font-bold mb-2 text-center text-gray-700">PALPITE:</h4><div class="grid grid-cols-3 gap-2 bet-options"><button class="bet-option py-2 border rounded-md" data-option="home">${game.home.name}</button><button class="bet-option py-2 border rounded-md" data-option="empate">EMPATE</button><button class="bet-option py-2 border rounded-md" data-option="away">${game.away.name}</button></div></div>
-                            <div class="mb-6"><h4 class="font-bold mb-2 text-center text-gray-700">VALOR:</h4><div class="grid grid-cols-4 gap-2 bet-values"><button class="bet-value py-2 border rounded-md" data-value="5">R$ 5</button><button class="bet-value py-2 border rounded-md" data-value="10">R$ 10</button><button class="bet-value py-2 border rounded-md" data-value="25">R$ 25</button><button class="bet-value py-2 border rounded-md" data-value="50">R$ 50</button></div></div>
+                            <div class="flex justify-around items-center mb-6"><div class="text-center w-1/3"><img src="${game.home.logo}" class="h-16 mx-auto mb-2" onerror="this.onerror=null;this.src='https://placehold.co/64x64/e2e8f0/e2e8f0?text=...';"><span class="font-bold">${game.home.name}</span></div><div class="text-2xl font-bold text-gray-400">VS</div><div class="text-center w-1/3"><img src="${game.away.logo}" class="h-16 mx-auto mb-2" onerror="this.onerror=null;this.src='https://placehold.co/64x64/e2e8f0/e2e8f0?text=...';"><span class="font-bold">${game.away.name}</span></div></div>
+                            <div class="mb-4">
+                                <h4 class="font-bold mb-2 text-center text-gray-700">PALPITE:</h4>
+                                <div class="grid grid-cols-3 gap-2 bet-options">
+                                    <button class="bet-option py-2 border rounded flex flex-col items-center" data-option="home"><span>${game.home.name}</span><span class="font-bold text-green-600">${game.odds.home.toFixed(2)}</span></button>
+                                    <button class="bet-option py-2 border rounded flex flex-col items-center" data-option="empate"><span>EMPATE</span><span class="font-bold text-green-600">${game.odds.draw.toFixed(2)}</span></button>
+                                    <button class="bet-option py-2 border rounded flex flex-col items-center" data-option="away"><span>${game.away.name}</span><span class="font-bold text-green-600">${game.odds.away.toFixed(2)}</span></button>
+                                </div>
+                            </div>
+                            <div class="mb-4">
+                                <h4 class="font-bold mb-2 text-center text-gray-700">VALOR DA APOSTA (R$):</h4>
+                                <input type="number" class="bet-value-input w-full p-2 border rounded text-center" min="1" step="any" placeholder="Ex: 10.00">
+                            </div>
+                            <div class="text-center font-bold mb-4 text-lg">
+                                Retorno Potencial: <span class="potential-payout text-green-700">R$ 0.00</span>
+                            </div>
                             <button class="confirm-btn w-full py-3 rounded-md text-white font-bold text-lg" disabled>APOSTAR</button>
                         </div>
                     </div>`;
                 });
                 addGameEventListeners();
-            } catch (error) {
+            } catch (error) { 
                 console.error("Erro ao carregar jogos:", error);
-                gamesContainer.innerHTML = '<p class="text-center text-red-500 col-span-1 md:col-span-2">Não foi possível carregar os jogos. Tente recarregar a página.</p>';
+                gamesContainer.innerHTML = '<p class="text-center text-red-500 col-span-2">Não foi possível carregar os jogos. O servidor pode estar a iniciar. Tente recarregar a página em alguns segundos.</p>';
             }
         }
-        
+
         async function loadResults() {
              try {
-                const response = await fetch(`${SERVER_URL}/results`);
+                const response = await fetch(`${SERVER_URL}/results`, { credentials: 'include' });
                 const results = await response.json();
-                resultsContainer.innerHTML = '';
-                 if (results.length === 0) {
-                    resultsContainer.innerHTML = '<p class="text-center text-gray-500">Ainda não há resultados de jogos anteriores.</p>';
-                    return;
-                }
+                resultsContainer.innerHTML = results.length === 0 ? '<p class="text-center text-gray-500">Ainda não há resultados de jogos anteriores.</p>' : '';
                 results.forEach(game => {
                     let winnerText = '';
                     if (game.result === 'empate') {
@@ -147,11 +150,8 @@
                                 <p class="font-bold text-gray-800">${game.home.name} vs ${game.away.name}</p>
                                 <p class="text-sm text-gray-500">${game.competition} - ${game.date}</p>
                             </div>
-                            <div class="text-right text-lg">
-                                ${winnerText}
-                            </div>
-                        </div>
-                    `;
+                            <div class="text-right text-lg">${winnerText}</div>
+                        </div>`;
                 });
             } catch (error) {
                 console.error("Erro ao carregar resultados:", error);
@@ -159,60 +159,74 @@
             }
         }
 
-        function addGameEventListeners() { 
+        function addGameEventListeners() {
             document.querySelectorAll('.bet-card').forEach(card => {
                 const gameId = card.dataset.gameId;
-                const betOptions = card.querySelector('.bet-options');
-                const betValues = card.querySelector('.bet-values');
-                const confirmBtn = card.querySelector('.confirm-btn');
+                const game = allGames.find(g => g._id === gameId);
                 let selectedOption = null;
-                let selectedValue = null;
+                let selectedOdd = 0;
+
+                const betOptions = card.querySelector('.bet-options');
+                const valueInput = card.querySelector('.bet-value-input');
+                const payoutEl = card.querySelector('.potential-payout');
+                const confirmBtn = card.querySelector('.confirm-btn');
 
                 betOptions.addEventListener('click', e => {
-                    if (e.target.tagName === 'BUTTON') {
-                        betOptions.querySelectorAll('button').forEach(btn => btn.classList.remove('selected'));
-                        e.target.classList.add('selected');
-                        selectedOption = e.target.dataset.option;
-                        checkSelections();
-                    }
+                    const button = e.target.closest('button.bet-option');
+                    if (!button) return;
+                    
+                    betOptions.querySelectorAll('.bet-option').forEach(btn => btn.classList.remove('selected'));
+                    button.classList.add('selected');
+
+                    selectedOption = button.dataset.option;
+                    selectedOdd = game.odds[selectedOption === 'empate' ? 'draw' : selectedOption];
+                    updatePayout();
                 });
 
-                betValues.addEventListener('click', e => {
-                    if (e.target.tagName === 'BUTTON') {
-                        betValues.querySelectorAll('button').forEach(btn => btn.classList.remove('selected'));
-                        e.target.classList.add('selected');
-                        selectedValue = e.target.dataset.value;
-                        checkSelections();
-                    }
-                });
+                valueInput.addEventListener('input', updatePayout);
 
-                function checkSelections() {
-                    confirmBtn.disabled = !(selectedOption && selectedValue);
+                function updatePayout() {
+                    const value = parseFloat(valueInput.value) || 0;
+                    const payout = value * selectedOdd;
+                    payoutEl.textContent = `R$ ${payout.toFixed(2)}`;
+                    confirmBtn.disabled = !(selectedOption && value > 0);
                 }
 
-                confirmBtn.addEventListener('click', () => handleBet(gameId, selectedOption, selectedValue));
+                confirmBtn.addEventListener('click', () => {
+                    const value = parseFloat(valueInput.value);
+                    handleBet(gameId, selectedOption, value);
+                });
             });
-         }
-        async function handleBet(gameId, option, value) {
-            const game = allGames.find(g => g._id === gameId);
-            if (!game) { alert('Erro: Jogo não encontrado.'); return; }
+        }
 
-            loadingModal.querySelector('p').textContent = 'A redirecionar para o pagamento...';
+        async function handleBet(gameId, option, value) {
+            if (!currentUser) {
+                alert("Por favor, faça login para apostar.");
+                return;
+            }
             loadingModal.classList.remove('hidden');
-            let betText = option === 'empate' ? 'EMPATE' : (option === 'home' ? game.home.name : game.away.name);
-            const betData = { gameId, title: `Aposta: ${game.home.name} vs ${game.away.name}`, description: `Palpite: ${betText}`, unit_price: value, user: currentUser };
+            const betData = { gameId, option, value, user: currentUser };
             try {
-                const response = await fetch(`${SERVER_URL}/criar-pagamento`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(betData) });
-                if (!response.ok) { const err = await response.json(); throw new Error(err.message || 'A resposta do servidor não foi OK.'); }
+                const response = await fetch(`${SERVER_URL}/criar-pagamento`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(betData),
+                    credentials: 'include'
+                });
+                if (!response.ok) {
+                    const err = await response.json();
+                    throw new Error(err.message || 'A resposta do servidor não foi OK.');
+                }
                 const data = await response.json();
                 window.location.href = data.init_point;
             } catch (error) {
                 loadingModal.classList.add('hidden');
-                alert(`Não foi possível iniciar o pagamento: ${error.message}. Por favor, tente novamente.`);
+                alert(`Não foi possível iniciar o pagamento: ${error.message}.`);
                 console.error("Erro ao criar pagamento:", error);
             }
         }
-        async function handleAuthAction() { 
+        
+        async function handleAuthAction() {
             const pix = pixInput.value.trim();
             const password = passwordInput.value.trim();
             const name = nameInput.value.trim();
@@ -226,37 +240,49 @@
             const body = isRegisterMode ? { name, pix, password } : { pix, password };
 
             try {
-                const response = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+                const response = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), credentials: 'include' });
                 const data = await response.json();
                 if (data.success) { loginSuccess(data.user); } 
                 else { showError(data.message || 'Ocorreu um erro.'); }
             } catch (err) { showError("Erro de comunicação com o servidor."); } 
             finally { loadingModal.classList.add('hidden'); }
-         }
-        function loginSuccess(user) { 
+        }
+        
+        function loginSuccess(user) {
             currentUser = user;
             localStorage.setItem('agrobetUser', JSON.stringify(currentUser));
             document.getElementById('user-name-display').textContent = currentUser.name.split(' ')[0];
             document.getElementById('user-info').classList.remove('hidden');
             logoutBtn.classList.remove('hidden');
             loginModal.style.display = 'none';
-         }
-        function logout() { 
+        }
+
+        function logout() {
             currentUser = null;
             localStorage.removeItem('agrobetUser');
             document.getElementById('user-info').classList.add('hidden');
             logoutBtn.classList.add('hidden');
             loginModal.style.display = 'flex';
-         }
+        }
+
         function showError(message) { loginError.textContent = message; }
-        function checkStoredUser() { const storedUser = localStorage.getItem('agrobetUser'); if (storedUser) { loginSuccess(JSON.parse(storedUser)); } else { loginModal.style.display = 'flex'; } }
-        async function displayMyBets() { 
+
+        function checkStoredUser() {
+            const storedUser = localStorage.getItem('agrobetUser');
+            if (storedUser) {
+                loginSuccess(JSON.parse(storedUser));
+            } else {
+                loginModal.style.display = 'flex';
+            }
+        }
+        
+        async function displayMyBets() {
             if (!currentUser) return;
             const listElement = document.getElementById('my-bets-list');
             listElement.innerHTML = '<p class="text-gray-500">A carregar apostas...</p>';
             myBetsModal.classList.remove('hidden');
             try {
-                const response = await fetch(`${SERVER_URL}/my-bets/${currentUser.pix}`);
+                const response = await fetch(`${SERVER_URL}/my-bets/${currentUser.pix}`, { credentials: 'include' });
                 const data = await response.json();
                 if (data.success) {
                     if (data.bets.length === 0) {
@@ -265,8 +291,9 @@
                     }
                     listElement.innerHTML = data.bets.map(bet => `
                         <div class="border rounded-md p-3 bg-gray-50">
-                            <p class="font-bold">${bet.gameTitle.replace('Aposta no jogo: ', '')}</p>
-                            <p>Palpite: ${bet.betChoice} - <span class="font-bold text-green-600">R$ ${bet.betValue.toFixed(2)}</span></p>
+                            <p class="font-bold">${bet.gameTitle}</p>
+                            <p>Palpite: ${bet.betChoice} - <span class="font-bold text-green-600">R$ ${Number(bet.betValue).toFixed(2)}</span> (Odd: ${bet.odds.toFixed(2)})</p>
+                            <p class="font-bold">Retorno Potencial: R$ ${bet.potentialPayout.toFixed(2)}</p>
                             <p class="text-sm text-gray-500">${new Date(bet.date).toLocaleString('pt-BR')}</p>
                         </div>
                     `).join('');
@@ -276,23 +303,24 @@
             } catch (error) {
                 listElement.innerHTML = '<p class="text-red-500">Não foi possível carregar as suas apostas.</p>';
             }
-         }
-        function toggleMode() { 
+        }
+
+        function toggleMode() {
             isRegisterMode = !isRegisterMode;
             showError('');
             loginTitle.textContent = isRegisterMode ? 'Registo' : 'Login';
             actionBtn.textContent = isRegisterMode ? 'Registar' : 'Entrar';
             switchModeLink.textContent = isRegisterMode ? 'Já tem uma conta? Entre' : 'Não tem uma conta? Registe-se';
             nameField.style.display = isRegisterMode ? 'block' : 'none';
-         }
+        }
         
-        actionBtn.addEventListener('click', handleAuthAction);
-        switchModeLink.addEventListener('click', (e) => { e.preventDefault(); toggleMode(); });
-        logoutBtn.addEventListener('click', logout);
-        document.getElementById('my-bets-btn').addEventListener('click', displayMyBets);
-        document.getElementById('close-my-bets').addEventListener('click', () => { myBetsModal.classList.add('hidden'); });
-
         document.addEventListener('DOMContentLoaded', () => {
+            actionBtn.addEventListener('click', handleAuthAction);
+            switchModeLink.addEventListener('click', (e) => { e.preventDefault(); toggleMode(); });
+            logoutBtn.addEventListener('click', logout);
+            document.getElementById('my-bets-btn').addEventListener('click', displayMyBets);
+            document.getElementById('close-my-bets').addEventListener('click', () => { myBetsModal.classList.add('hidden'); });
+
             loadOpenGames();
             loadResults();
             checkStoredUser();
@@ -300,3 +328,4 @@
     </script>
 </body>
 </html>
+
