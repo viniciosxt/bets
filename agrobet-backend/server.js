@@ -26,7 +26,8 @@ const GameSchema = new mongoose.Schema({
         home: { type: Number, default: 1.5 },
         away: { type: Number, default: 1.5 },
         draw: { type: Number, default: 1.5 }
-    }
+    },
+    maxBetValue: { type: Number, default: 35 } // Limite de valor por aposta
 });
 const Game = mongoose.model('Game', GameSchema);
 
@@ -156,6 +157,11 @@ app.post('/criar-pagamento', async (req, res) => {
             return res.status(400).json({ message: 'Este jogo não está mais aberto para apostas.' });
         }
         
+        // VERIFICA O LIMITE DE VALOR POR APOSTA
+        if (value > game.maxBetValue) {
+            return res.status(400).json({ message: `O valor máximo para esta aposta é R$ ${game.maxBetValue.toFixed(2)}.` });
+        }
+
         const oddsKey = option === 'empate' ? 'draw' : option;
         const odds = game.odds[oddsKey];
         const potentialPayout = value * odds;
@@ -183,6 +189,7 @@ app.post('/criar-pagamento', async (req, res) => {
         const result = await preference.create(preferenceData);
         res.json({ id: result.id, init_point: result.init_point });
     } catch (error) {
+        console.error(error);
         res.status(500).json({ message: 'Erro no servidor ao criar pagamento.' });
     }
 });
@@ -363,7 +370,7 @@ app.get('/admin/financial-report', authAdmin, async (req, res) => {
                                 </tr>
                             </thead>
                             <tbody>
-                                ${reportData.map(bet => `
+                                ${reportData.length > 0 ? reportData.map(bet => `
                                     <tr class="border-b" data-game-title="${bet.gameTitle}">
                                         <td class="py-3 px-4">${bet.user.name}</td>
                                         <td class="py-3 px-4">${bet.user.pix}</td>
@@ -374,7 +381,14 @@ app.get('/admin/financial-report', authAdmin, async (req, res) => {
                                         <td class="py-3 px-4 font-semibold ${bet.betStatus === 'Ganhou' ? 'text-green-600' : 'text-red-600'}">${bet.betStatus}</td>
                                         <td class="py-3 px-4 font-bold text-blue-700">R$ ${bet.amountToPay.toFixed(2)}</td>
                                     </tr>
-                                `).join('')}
+                                `).join('') : `
+                                <tr>
+                                    <td colspan="8" class="text-center py-10 text-gray-500">
+                                        <p class="font-bold text-lg">Nenhum dado para exibir no relatório.</p>
+                                        <p>Isto pode acontecer porque ainda não há jogos finalizados que tenham apostas confirmadas.</p>
+                                    </td>
+                                </tr>
+                                `}
                             </tbody>
                         </table>
                     </div>
@@ -450,6 +464,12 @@ app.get('/admin/games', authAdmin, async (req, res) => {
                         <input name="date" placeholder="Data (ex: 25/12/2025 - 20:00)" class="p-2 border rounded" required>
                         <input name="competition" placeholder="Competição" class="p-2 border rounded" required>
                     </div>
+                     <div>
+                        <h3 class="font-semibold mb-2">Detalhes da Aposta</h3>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                           <input type="number" step="0.01" name="max_bet_value" placeholder="Valor Máx. por Aposta (R$)" class="p-2 border rounded" value="35" required>
+                        </div>
+                    </div>
                     <div><h3 class="font-semibold mb-2">Odds Iniciais</h3>
                         <div class="grid grid-cols-3 gap-4">
                            <input type="number" step="0.01" name="odds_home" placeholder="Odd Casa (ex: 1.5)" class="p-2 border rounded" required>
@@ -466,9 +486,9 @@ app.get('/admin/games', authAdmin, async (req, res) => {
                     <div class="border p-4 rounded-lg">
                         <p class="font-bold text-lg">${game.home.name} vs ${game.away.name}</p>
                         <p class="text-sm">Odds: Casa ${game.odds.home.toFixed(2)} | Empate ${game.odds.draw.toFixed(2)} | Visitante ${game.odds.away.toFixed(2)}</p>
-                        <p>Status: <span class="font-semibold">${game.status}</span> | Resultado: <span class="font-semibold">${game.result}</span></p>
+                        <p>Status: <span class="font-semibold">${game.status}</span> | Resultado: <span class="font-semibold">${game.result}</span> | Limite Aposta: <span class="font-semibold">R$ ${game.maxBetValue.toFixed(2)}</span></p>
                         <div class="mt-2">
-                            ${game.status === 'aberto' ? `<a href="/admin/edit-game/${game._id}" class="bg-blue-500 text-white px-3 py-1 rounded text-sm mr-2">Editar Odds</a><form action="/admin/close-game/${game._id}" method="post" class="inline-block"><button class="bg-yellow-500 text-white px-3 py-1 rounded text-sm">Fechar Apostas</button></form>` : ''}
+                            ${game.status === 'aberto' ? `<a href="/admin/edit-game/${game._id}" class="bg-blue-500 text-white px-3 py-1 rounded text-sm mr-2">Editar Jogo</a><form action="/admin/close-game/${game._id}" method="post" class="inline-block"><button class="bg-yellow-500 text-white px-3 py-1 rounded text-sm">Fechar Apostas</button></form>` : ''}
                             ${game.status === 'fechado' ? `<form action="/admin/finalize-game/${game._id}" method="post"><select name="result" class="p-2 border rounded"><option value="home">Vencedor: ${game.home.name}</option><option value="away">Vencedor: ${game.away.name}</option><option value="empate">Empate</option></select><button type="submit" class="bg-green-500 text-white px-3 py-1 rounded text-sm ml-2">Finalizar Jogo</button></form>` : ''}
                         </div>
                     </div>`).join('')}
@@ -478,12 +498,13 @@ app.get('/admin/games', authAdmin, async (req, res) => {
 
 app.post('/admin/add-game', authAdmin, async (req, res) => {
     try {
-        const { home_name, home_logo, away_name, away_logo, date, competition, odds_home, odds_draw, odds_away } = req.body;
+        const { home_name, home_logo, away_name, away_logo, date, competition, odds_home, odds_draw, odds_away, max_bet_value } = req.body;
         const newGame = new Game({
             home: { name: home_name, logo: home_logo },
             away: { name: away_name, logo: away_logo },
             date, competition,
-            odds: { home: parseFloat(odds_home), draw: parseFloat(odds_draw), away: parseFloat(odds_away) }
+            odds: { home: parseFloat(odds_home), draw: parseFloat(odds_draw), away: parseFloat(odds_away) },
+            maxBetValue: parseFloat(max_bet_value)
         });
         await newGame.save();
         res.redirect('/admin/games');
@@ -495,11 +516,14 @@ app.get('/admin/edit-game/:id', authAdmin, async(req, res) => {
         const game = await Game.findById(req.params.id);
         if (!game) return res.status(404).send('Jogo não encontrado');
         res.send(`<!DOCTYPE html>
-            <html lang="pt-BR"><head><title>Editar Odds</title><script src="https://cdn.tailwindcss.com"></script></head>
+            <html lang="pt-BR"><head><title>Editar Jogo</title><script src="https://cdn.tailwindcss.com"></script></head>
             <body class="bg-gray-100 p-8"><div class="container mx-auto max-w-lg">
-            <h1 class="text-3xl font-bold mb-6">Editar Odds para ${game.home.name} vs ${game.away.name}</h1>
+            <h1 class="text-3xl font-bold mb-6">Editar Jogo: ${game.home.name} vs ${game.away.name}</h1>
             <div class="bg-white p-6 rounded shadow-md">
                 <form action="/admin/edit-game/${game._id}" method="post" class="space-y-4">
+                    <div><label class="block font-semibold">Valor Máx. por Aposta (R$)</label><input type="number" step="0.01" name="max_bet_value" value="${game.maxBetValue}" class="w-full p-2 border rounded" required></div>
+                    <hr/>
+                    <h3 class="font-bold text-lg pt-2">Odds</h3>
                     <div><label class="block font-semibold">Odd Casa</label><input type="number" step="0.01" name="odds_home" value="${game.odds.home}" class="w-full p-2 border rounded" required></div>
                     <div><label class="block font-semibold">Odd Empate</label><input type="number" step="0.01" name="odds_draw" value="${game.odds.draw}" class="w-full p-2 border rounded" required></div>
                     <div><label class="block font-semibold">Odd Visitante</label><input type="number" step="0.01" name="odds_away" value="${game.odds.away}" class="w-full p-2 border rounded" required></div>
@@ -512,12 +536,13 @@ app.get('/admin/edit-game/:id', authAdmin, async(req, res) => {
 
 app.post('/admin/edit-game/:id', authAdmin, async(req, res) => {
     try {
-        const { odds_home, odds_draw, odds_away } = req.body;
+        const { odds_home, odds_draw, odds_away, max_bet_value } = req.body;
         await Game.findByIdAndUpdate(req.params.id, {
             $set: {
                 'odds.home': parseFloat(odds_home),
                 'odds.draw': parseFloat(odds_draw),
                 'odds.away': parseFloat(odds_away),
+                'maxBetValue': parseFloat(max_bet_value)
             }
         });
         res.redirect('/admin/games');
