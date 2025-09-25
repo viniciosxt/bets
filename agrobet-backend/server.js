@@ -195,6 +195,9 @@ app.post('/criar-pagamento', async (req, res) => {
         const odds = game.odds[oddsKey];
         const potentialPayout = value * odds;
         const betChoiceText = option === 'empate' ? 'Empate' : game[option].name;
+        
+        // CORREÇÃO: Usa uma variável para o redirecionamento, com fallback para a variável antiga
+        const redirectUrl = process.env.SUCCESS_REDIRECT_URL || process.env.FRONTEND_URL;
 
         const preferenceData = {
             body: {
@@ -206,7 +209,7 @@ app.post('/criar-pagamento', async (req, res) => {
                     unit_price: Number(value),
                     currency_id: 'BRL'
                 }],
-                back_urls: { success: process.env.FRONTEND_URL, failure: process.env.FRONTEND_URL, pending: process.env.FRONTEND_URL },
+                back_urls: { success: redirectUrl, failure: redirectUrl, pending: redirectUrl },
                 auto_return: 'approved', // Redireciona automaticamente em caso de sucesso
                 notification_url: `${process.env.SERVER_URL}/webhook-mercadopago`,
                 metadata: {
