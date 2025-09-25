@@ -76,6 +76,7 @@
         let currentUser = null;
         let isRegisterMode = false;
         let allGames = [];
+        let currentUserBets = [];
 
         // --- ELEMENTOS DO DOM ---
         const gamesContainer = document.getElementById('games-container');
@@ -99,7 +100,17 @@
                 const games = await response.json();
                 allGames = games;
                 gamesContainer.innerHTML = games.length === 0 ? '<p class="text-center text-gray-500 col-span-2">Nenhum jogo aberto para apostas.</p>' : '';
+                
                 games.forEach(game => {
+                    const userBetsOnThisGame = currentUserBets.filter(bet => bet.gameId === game._id);
+                    const totalAlreadyBet = userBetsOnThisGame.reduce((acc, bet) => acc + bet.betValue, 0);
+                    const remainingValue = game.maxBetValue - totalAlreadyBet;
+
+                    let betLimitMessage = `Aposta máxima: R$ ${game.maxBetValue.toFixed(2)}`;
+                    if (totalAlreadyBet > 0) {
+                        betLimitMessage = `Já apostou R$ ${totalAlreadyBet.toFixed(2)}. Pode apostar mais R$ ${remainingValue.toFixed(2)}.`;
+                    }
+                    
                     gamesContainer.innerHTML += `
                     <div class="bet-card bg-white rounded-lg shadow-md border border-gray-200 overflow-hidden" data-game-id="${game._id}">
                         <div class="bg-green-800 text-white py-2 px-4 flex justify-between items-center"><h3 class="title-font text-xl">${game.competition}</h3><div class="text-sm bg-white text-green-800 font-bold px-3 py-1 rounded-full">${game.date}</div></div>
@@ -108,19 +119,30 @@
                             <div class="mb-4">
                                 <h4 class="font-bold mb-2 text-center text-gray-700">PALPITE:</h4>
                                 <div class="grid grid-cols-3 gap-2 bet-options">
-                                    <button class="bet-option py-2 border rounded flex flex-col items-center" data-option="home"><span>${game.home.name}</span><span class="font-bold text-green-600">${game.odds.home.toFixed(2)}</span></button>
-                                    <button class="bet-option py-2 border rounded flex flex-col items-center" data-option="empate"><span>EMPATE</span><span class="font-bold text-green-600">${game.odds.draw.toFixed(2)}</span></button>
-                                    <button class="bet-option py-2 border rounded flex flex-col items-center" data-option="away"><span>${game.away.name}</span><span class="font-bold text-green-600">${game.odds.away.toFixed(2)}</span></button>
+                                    <button class="bet-option py-2 border rounded flex flex-col items-center" data-option="home" ${remainingValue <= 0 ? 'disabled' : ''}><span>${game.home.name}</span><span class="font-bold text-green-600">${game.odds.home.toFixed(2)}</span></button>
+                                    <button class="bet-option py-2 border rounded flex flex-col items-center" data-option="empate" ${remainingValue <= 0 ? 'disabled' : ''}><span>EMPATE</span><span class="font-bold text-green-600">${game.odds.draw.toFixed(2)}</span></button>
+                                    <button class="bet-option py-2 border rounded flex flex-col items-center" data-option="away" ${remainingValue <= 0 ? 'disabled' : ''}><span>${game.away.name}</span><span class="font-bold text-green-600">${game.odds.away.toFixed(2)}</span></button>
                                 </div>
                             </div>
                             <div class="mb-4">
                                 <h4 class="font-bold mb-2 text-center text-gray-700">VALOR DA APOSTA (R$):</h4>
-                                <input type="number" class="bet-value-input w-full p-2 border rounded text-center" min="1" step="any" placeholder="Ex: 10.00">
+                                ${remainingValue > 0 ? `
+                                    <input type="number" class="bet-value-input w-full p-2 border rounded text-center" min="1" max="${remainingValue.toFixed(2)}" step="any" placeholder="Ex: 10.00">
+                                    <p class="text-xs text-center text-gray-500 mt-1">${betLimitMessage}</p>
+                                ` : `
+                                    <div class="text-center p-2 bg-gray-100 rounded-md">
+                                        <p class="font-bold text-red-600">Limite de aposta atingido!</p>
+                                        <p class="text-xs text-gray-600">Já apostou o máximo de R$ ${game.maxBetValue.toFixed(2)} neste jogo.</p>
+                                    </div>
+                                `}
                             </div>
                             <div class="text-center font-bold mb-4 text-lg">
                                 Retorno Potencial: <span class="potential-payout text-green-700">R$ 0.00</span>
                             </div>
-                            <button class="confirm-btn w-full py-3 rounded-md text-white font-bold text-lg" disabled>APOSTAR</button>
+                            <div class="bet-error text-red-500 text-sm text-center h-4 mb-2"></div>
+                            <button class="confirm-btn w-full py-3 rounded-md text-white font-bold text-lg" ${remainingValue <= 0 ? 'disabled' : ''}>
+                                ${remainingValue > 0 ? 'APOSTAR' : 'LIMITE ATINGIDO'}
+                            </button>
                         </div>
                     </div>`;
                 });
@@ -170,16 +192,20 @@
                 const valueInput = card.querySelector('.bet-value-input');
                 const payoutEl = card.querySelector('.potential-payout');
                 const confirmBtn = card.querySelector('.confirm-btn');
+                const errorEl = card.querySelector('.bet-error');
+
+                if (confirmBtn.disabled) return; // Se o botão já estiver desativado, não adicione listeners
 
                 betOptions.addEventListener('click', e => {
                     const button = e.target.closest('button.bet-option');
-                    if (!button) return;
+                    if (!button || button.disabled) return;
                     
                     betOptions.querySelectorAll('.bet-option').forEach(btn => btn.classList.remove('selected'));
                     button.classList.add('selected');
 
                     selectedOption = button.dataset.option;
-                    selectedOdd = game.odds[selectedOption === 'empate' ? 'draw' : selectedOption];
+                    const oddsKey = selectedOption === 'empate' ? 'draw' : selectedOption;
+                    selectedOdd = game.odds[oddsKey] || 0;
                     updatePayout();
                 });
 
@@ -193,15 +219,25 @@
                 }
 
                 confirmBtn.addEventListener('click', () => {
+                    errorEl.textContent = ''; // Limpa erro anterior
                     const value = parseFloat(valueInput.value);
-                    handleBet(gameId, selectedOption, value);
+
+                    // Validação do lado do cliente
+                    if (value > parseFloat(valueInput.max)) {
+                        errorEl.textContent = `O valor máximo restante é R$ ${parseFloat(valueInput.max).toFixed(2)}.`;
+                        return;
+                    }
+                    
+                    handleBet(gameId, selectedOption, value, card);
                 });
             });
         }
 
-        async function handleBet(gameId, option, value) {
+        async function handleBet(gameId, option, value, card) {
+            const errorEl = card.querySelector('.bet-error');
             if (!currentUser) {
-                alert("Por favor, faça login para apostar.");
+                showError("Por favor, faça login para poder apostar.");
+                loginModal.style.display = 'flex';
                 return;
             }
             loadingModal.classList.remove('hidden');
@@ -221,7 +257,9 @@
                 window.location.href = data.init_point;
             } catch (error) {
                 loadingModal.classList.add('hidden');
-                alert(`Não foi possível iniciar o pagamento: ${error.message}.`);
+                if (errorEl) {
+                    errorEl.textContent = error.message;
+                }
                 console.error("Erro ao criar pagamento:", error);
             }
         }
@@ -242,10 +280,31 @@
             try {
                 const response = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), credentials: 'include' });
                 const data = await response.json();
-                if (data.success) { loginSuccess(data.user); } 
-                else { showError(data.message || 'Ocorreu um erro.'); }
-            } catch (err) { showError("Erro de comunicação com o servidor."); } 
-            finally { loadingModal.classList.add('hidden'); }
+                if (data.success) { 
+                    loginSuccess(data.user); 
+                } else { 
+                    showError(data.message || 'Ocorreu um erro.'); 
+                }
+            } catch (err) { 
+                showError("Erro de comunicação com o servidor."); 
+            } finally { 
+                loadingModal.classList.add('hidden'); 
+            }
+        }
+        
+        async function initializeUserSession() {
+            if (!currentUser) return;
+            try {
+                const response = await fetch(`${SERVER_URL}/my-bets/${currentUser.pix}`, { credentials: 'include' });
+                const data = await response.json();
+                if (data.success) {
+                    currentUserBets = data.bets;
+                }
+            } catch (error) {
+                console.error("Erro ao carregar as apostas do utilizador:", error);
+                currentUserBets = [];
+            }
+            await Promise.all([loadOpenGames(), loadResults()]);
         }
         
         function loginSuccess(user) {
@@ -255,14 +314,20 @@
             document.getElementById('user-info').classList.remove('hidden');
             logoutBtn.classList.remove('hidden');
             loginModal.style.display = 'none';
+            initializeUserSession();
         }
 
         function logout() {
             currentUser = null;
+            currentUserBets = [];
             localStorage.removeItem('agrobetUser');
             document.getElementById('user-info').classList.add('hidden');
             logoutBtn.classList.add('hidden');
             loginModal.style.display = 'flex';
+            gamesContainer.innerHTML = '';
+            resultsContainer.innerHTML = '';
+            loadOpenGames();
+            loadResults();
         }
 
         function showError(message) { loginError.textContent = message; }
@@ -273,6 +338,8 @@
                 loginSuccess(JSON.parse(storedUser));
             } else {
                 loginModal.style.display = 'flex';
+                loadOpenGames();
+                loadResults();
             }
         }
         
@@ -281,27 +348,19 @@
             const listElement = document.getElementById('my-bets-list');
             listElement.innerHTML = '<p class="text-gray-500">A carregar apostas...</p>';
             myBetsModal.classList.remove('hidden');
-            try {
-                const response = await fetch(`${SERVER_URL}/my-bets/${currentUser.pix}`, { credentials: 'include' });
-                const data = await response.json();
-                if (data.success) {
-                    if (data.bets.length === 0) {
-                        listElement.innerHTML = '<p class="text-gray-500">Ainda não tem nenhuma aposta confirmada.</p>';
-                        return;
-                    }
-                    listElement.innerHTML = data.bets.map(bet => `
-                        <div class="border rounded-md p-3 bg-gray-50">
-                            <p class="font-bold">${bet.gameTitle}</p>
-                            <p>Palpite: ${bet.betChoice} - <span class="font-bold text-green-600">R$ ${Number(bet.betValue).toFixed(2)}</span> (Odd: ${bet.odds.toFixed(2)})</p>
-                            <p class="font-bold">Retorno Potencial: R$ ${bet.potentialPayout.toFixed(2)}</p>
-                            <p class="text-sm text-gray-500">${new Date(bet.date).toLocaleString('pt-BR')}</p>
-                        </div>
-                    `).join('');
-                } else {
-                    listElement.innerHTML = `<p class="text-red-500">${data.message}</p>`;
-                }
-            } catch (error) {
-                listElement.innerHTML = '<p class="text-red-500">Não foi possível carregar as suas apostas.</p>';
+
+            // Re-utiliza os dados já carregados
+            if (currentUserBets.length > 0) {
+                 listElement.innerHTML = currentUserBets.map(bet => `
+                    <div class="border rounded-md p-3 bg-gray-50">
+                        <p class="font-bold">${bet.gameTitle}</p>
+                        <p>Palpite: ${bet.betChoice} - <span class="font-bold text-green-600">R$ ${Number(bet.betValue).toFixed(2)}</span> (Odd: ${bet.odds.toFixed(2)})</p>
+                        <p class="font-bold">Retorno Potencial: R$ ${bet.potentialPayout.toFixed(2)}</p>
+                        <p class="text-sm text-gray-500">${new Date(bet.date).toLocaleString('pt-BR')}</p>
+                    </div>
+                `).join('');
+            } else {
+                 listElement.innerHTML = '<p class="text-gray-500">Ainda não tem nenhuma aposta confirmada.</p>';
             }
         }
 
@@ -320,9 +379,6 @@
             logoutBtn.addEventListener('click', logout);
             document.getElementById('my-bets-btn').addEventListener('click', displayMyBets);
             document.getElementById('close-my-bets').addEventListener('click', () => { myBetsModal.classList.add('hidden'); });
-
-            loadOpenGames();
-            loadResults();
             checkStoredUser();
         });
     </script>
