@@ -173,7 +173,7 @@ app.get('/results', async (req, res) => {
     } catch (error) { res.status(500).json({ message: "Erro ao buscar resultados." }); }
 });
 
-app.get('/relatorio', authAdmin, async (req, res) => {
+app.get('/relatorio', async (req, res) => {
     try {
         const bets = await Bet.find({ status: 'approved' }).sort({ date: -1 });
         let html = `
@@ -183,21 +183,8 @@ app.get('/relatorio', authAdmin, async (req, res) => {
             <table class="min-w-full bg-white"><thead class="bg-gray-800 text-white">
             <tr><th class="py-3 px-4 text-left">Data</th><th class="py-3 px-4 text-left">Utilizador</th><th class="py-3 px-4 text-left">Jogo</th><th class="py-3 px-4 text-left">Palpite</th><th class="py-3 px-4 text-left">Valor</th><th class="py-3 px-4 text-left">Odd</th><th class="py-3 px-4 text-left">Retorno Pot.</th></tr>
             </thead><tbody>`;
-        
         bets.forEach(bet => {
-            const oddText = (bet.odds && typeof bet.odds === 'number') ? bet.odds.toFixed(2) : 'N/A';
-            const payoutText = (bet.potentialPayout && typeof bet.potentialPayout === 'number') ? `R$ ${bet.potentialPayout.toFixed(2)}` : 'N/A';
-            const valueText = (bet.betValue && typeof bet.betValue === 'number') ? `R$ ${bet.betValue.toFixed(2)}` : 'N/A';
-
-            html += `<tr class="border-b">
-                        <td class="py-3 px-4">${new Date(bet.date).toLocaleString('pt-BR')}</td>
-                        <td class="py-3 px-4">${bet.user.name || 'N/A'}</td>
-                        <td class="py-3 px-4">${bet.gameTitle || 'N/A'}</td>
-                        <td class="py-3 px-4">${bet.betChoice || 'N/A'}</td>
-                        <td class="py-3 px-4">${valueText}</td>
-                        <td class="py-3 px-4">${oddText}</td>
-                        <td class="py-3 px-4 font-semibold text-green-700">${payoutText}</td>
-                     </tr>`;
+            html += `<tr class="border-b"><td class="py-3 px-4">${new Date(bet.date).toLocaleString('pt-BR')}</td><td class="py-3 px-4">${bet.user.name}</td><td class="py-3 px-4">${bet.gameTitle}</td><td class="py-3 px-4">${bet.betChoice}</td><td class="py-3 px-4">R$ ${bet.betValue.toFixed(2)}</td><td class="py-3 px-4">${bet.odds.toFixed(2)}</td><td class="py-3 px-4 font-semibold text-green-700">R$ ${bet.potentialPayout.toFixed(2)}</td></tr>`;
         });
         html += `</tbody></table></div></div></body></html>`;
         res.send(html);
@@ -232,12 +219,164 @@ app.post('/admin/login', (req, res) => {
 app.get('/admin/dashboard', authAdmin, (req, res) => {
     res.send(`
         <!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><title>Painel de Administração</title><script src="https://cdn.tailwindcss.com"></script></head>
-        <body class="bg-gray-200 min-h-screen flex items-center justify-center"><div class="container mx-auto p-8 bg-white rounded-lg shadow-lg max-w-2xl text-center">
-        <h1 class="text-4xl font-bold mb-8 text-gray-800">Painel de Administração</h1><div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <a href="/admin/games" class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-6 px-4 rounded-lg text-xl transition-transform transform hover:scale-105">Gerir Jogos</a>
-        <a href="/relatorio" target="_blank" class="bg-green-500 hover:bg-green-600 text-white font-bold py-6 px-4 rounded-lg text-xl transition-transform transform hover:scale-105">Ver Relatório de Apostas</a>
+        <body class="bg-gray-200 min-h-screen flex items-center justify-center"><div class="container mx-auto p-8 bg-white rounded-lg shadow-lg max-w-4xl text-center">
+        <h1 class="text-4xl font-bold mb-8 text-gray-800">Painel de Administração</h1><div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <a href="/admin/games" class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-6 px-4 rounded-lg text-xl transition-transform transform hover:scale-105 flex flex-col justify-center">Gerir Jogos</a>
+        <a href="/relatorio" target="_blank" class="bg-gray-500 hover:bg-gray-600 text-white font-bold py-6 px-4 rounded-lg text-xl transition-transform transform hover:scale-105 flex flex-col justify-center">Relatório Geral<span class="text-xs font-normal">(Todas as apostas)</span></a>
+        <a href="/admin/financial-report" target="_blank" class="bg-green-600 hover:bg-green-700 text-white font-bold py-6 px-4 rounded-lg text-xl transition-transform transform hover:scale-105 flex flex-col justify-center">Relatório Financeiro<span class="text-xs font-normal">(Pagamentos e Balanço)</span></a>
         </div><form action="/admin/logout" method="post" class="mt-8"><button type="submit" class="bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-6 rounded-lg">Sair</button></form>
         </div></body></html>`);
+});
+
+// NOVA ROTA: Relatório Financeiro
+app.get('/admin/financial-report', authAdmin, async (req, res) => {
+    try {
+        const bets = await Bet.find({ status: 'approved' }).populate('gameId').lean();
+        const finalizedGames = await Game.find({ status: 'finalizado' }).lean();
+
+        const reportData = [];
+        let totalLostValue = 0;
+        let totalToPay = 0;
+
+        for (const game of finalizedGames) {
+            const betsForGame = bets.filter(bet => bet.gameId && bet.gameId._id.equals(game._id));
+
+            for (const bet of betsForGame) {
+                let isWinner = false;
+                const gameResult = game.result; // 'home', 'away', 'empate'
+                const betChoice = bet.betChoice; // 'Nome do Time', 'Empate'
+
+                if (gameResult === 'empate' && betChoice === 'Empate') {
+                    isWinner = true;
+                } else if (gameResult === 'home' && betChoice === game.home.name) {
+                    isWinner = true;
+                } else if (gameResult === 'away' && betChoice === game.away.name) {
+                    isWinner = true;
+                }
+                
+                let resultText = 'Pendente';
+                 if (game.result === 'home') resultText = `Vencedor: ${game.home.name}`;
+                 else if (game.result === 'away') resultText = `Vencedor: ${game.away.name}`;
+                 else if (game.result === 'empate') resultText = 'Empate';
+
+                reportData.push({
+                    ...bet,
+                    gameResult: resultText,
+                    betStatus: isWinner ? 'Ganhou' : 'Perdeu',
+                    amountToPay: isWinner ? bet.potentialPayout : 0,
+                });
+
+                if (isWinner) {
+                    totalToPay += bet.potentialPayout;
+                } else {
+                    totalLostValue += bet.betValue;
+                }
+            }
+        }
+        
+        const balance = totalLostValue - totalToPay;
+
+        // HTML da página de relatório
+        res.send(`
+            <!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><title>Relatório Financeiro</title><script src="https://cdn.tailwindcss.com"></script></head>
+            <body class="bg-gray-100 p-4 md:p-8">
+                <div class="container mx-auto bg-white p-6 rounded-lg shadow-md">
+                    <div class="flex flex-wrap justify-between items-center mb-6">
+                        <h1 class="text-3xl font-bold text-gray-800">Relatório Financeiro</h1>
+                        <div>
+                            <select id="gameFilter" class="p-2 border rounded-md mr-2">
+                                <option value="all">Todos os Jogos</option>
+                                ${finalizedGames.map(g => `<option value="${g.home.name} vs ${g.away.name}">${g.home.name} vs ${g.away.name}</option>`).join('')}
+                            </select>
+                            <button id="export-csv" class="bg-green-600 text-white font-bold py-2 px-4 rounded-md hover:bg-green-700">Exportar para Excel (CSV)</button>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6 text-center">
+                        <div class="bg-red-100 p-4 rounded-lg"><p class="text-sm text-red-700">Total Arrecadado (Perdas)</p><p class="text-2xl font-bold text-red-800">R$ ${totalLostValue.toFixed(2)}</p></div>
+                        <div class="bg-blue-100 p-4 rounded-lg"><p class="text-sm text-blue-700">Total a Pagar (Ganhos)</p><p class="text-2xl font-bold text-blue-800">R$ ${totalToPay.toFixed(2)}</p></div>
+                        <div class="bg-green-100 p-4 rounded-lg"><p class="text-sm text-green-700">Balanço (Lucro)</p><p class="text-2xl font-bold text-green-800">R$ ${balance.toFixed(2)}</p></div>
+                    </div>
+                    
+                    <div class="overflow-x-auto">
+                        <table id="report-table" class="min-w-full bg-white">
+                            <thead class="bg-gray-800 text-white">
+                                <tr>
+                                    <th class="py-3 px-4 text-left">Utilizador</th>
+                                    <th class="py-3 px-4 text-left">Chave PIX</th>
+                                    <th class="py-3 px-4 text-left">Jogo</th>
+                                    <th class="py-3 px-4 text-left">Palpite</th>
+                                    <th class="py-3 px-4 text-left">Resultado do Jogo</th>
+                                    <th class="py-3 px-4 text-left">Valor Aposta</th>
+                                    <th class="py-3 px-4 text-left">Status</th>
+                                    <th class="py-3 px-4 text-left">Valor a Pagar</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${reportData.map(bet => `
+                                    <tr class="border-b" data-game-title="${bet.gameTitle}">
+                                        <td class="py-3 px-4">${bet.user.name}</td>
+                                        <td class="py-3 px-4">${bet.user.pix}</td>
+                                        <td class="py-3 px-4">${bet.gameTitle}</td>
+                                        <td class="py-3 px-4">${bet.betChoice}</td>
+                                        <td class="py-3 px-4">${bet.gameResult}</td>
+                                        <td class="py-3 px-4">R$ ${bet.betValue.toFixed(2)}</td>
+                                        <td class="py-3 px-4 font-semibold ${bet.betStatus === 'Ganhou' ? 'text-green-600' : 'text-red-600'}">${bet.betStatus}</td>
+                                        <td class="py-3 px-4 font-bold text-blue-700">R$ ${bet.amountToPay.toFixed(2)}</td>
+                                    </tr>
+                                `).join('')}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                <script>
+                    document.getElementById('gameFilter').addEventListener('change', function() {
+                        const selectedGame = this.value;
+                        const tableRows = document.querySelectorAll('#report-table tbody tr');
+                        tableRows.forEach(row => {
+                            if (selectedGame === 'all' || row.dataset.gameTitle === selectedGame) {
+                                row.style.display = '';
+                            } else {
+                                row.style.display = 'none';
+                            }
+                        });
+                    });
+
+                    function downloadCSV(csv, filename) {
+                        const csvFile = new Blob(["\\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
+                        const link = document.createElement("a");
+                        link.href = URL.createObjectURL(csvFile);
+                        link.download = filename;
+                        link.style.display = "none";
+                        document.body.appendChild(link);
+                        link.click();
+                        document.body.removeChild(link);
+                    }
+
+                    document.getElementById('export-csv').addEventListener('click', function() {
+                        const table = document.getElementById('report-table');
+                        const rows = table.querySelectorAll('tr');
+                        let csv = [];
+                        for (let i = 0; i < rows.length; i++) {
+                            const row = [], cols = rows[i].querySelectorAll('td, th');
+                            // Apenas incluir linhas visíveis
+                            if (rows[i].style.display !== 'none') {
+                                for (let j = 0; j < cols.length; j++) {
+                                    row.push('"' + cols[j].innerText.replace(/\\n/g, ' ') + '"');
+                                }
+                                csv.push(row.join(','));
+                            }
+                        }
+                        downloadCSV(csv.join('\\n'), 'relatorio_financeiro.csv');
+                    });
+                </script>
+            </body></html>
+        `);
+
+    } catch (error) {
+        console.error("Erro ao gerar relatório financeiro:", error);
+        res.status(500).send("Erro ao gerar o relatório financeiro.");
+    }
 });
 
 app.post('/admin/logout', (req, res) => {
@@ -248,13 +387,7 @@ app.post('/admin/logout', (req, res) => {
 app.get('/admin/games', authAdmin, async (req, res) => {
     try {
         const games = await Game.find().sort({ date: -1 });
-        res.send(`<!DOCTYPE html><html lang="pt-BR"><head><title>Gerir Jogos</title><script src="https://cdn.tailwindcss.com"></script>
-            <script>
-                function confirmDelete() {
-                    return confirm('Tem a certeza de que deseja apagar permanentemente todo o histórico de resultados? Esta ação não pode ser desfeita.');
-                }
-            </script>
-            </head>
+        res.send(`<!DOCTYPE html><html lang="pt-BR"><head><title>Gerir Jogos</title><script src="https://cdn.tailwindcss.com"></script></head>
             <body class="bg-gray-100 p-8"><div class="container mx-auto"><h1 class="text-3xl font-bold mb-6">Gerir Jogos</h1>
             <div class="bg-white p-6 rounded shadow-md mb-8">
                 <h2 class="text-2xl font-semibold mb-4">Adicionar Novo Jogo</h2>
@@ -269,21 +402,16 @@ app.get('/admin/games', authAdmin, async (req, res) => {
                     </div>
                     <div><h3 class="font-semibold mb-2">Odds Iniciais</h3>
                         <div class="grid grid-cols-3 gap-4">
-                           <input type="number" step="0.01" min="1.01" name="odds_home" placeholder="Odd Casa (ex: 1.5)" class="p-2 border rounded" required>
-                           <input type="number" step="0.01" min="1.01" name="odds_draw" placeholder="Odd Empate (ex: 3.0)" class="p-2 border rounded" required>
-                           <input type="number" step="0.01" min="1.01" name="odds_away" placeholder="Odd Visitante (ex: 2.5)" class="p-2 border rounded" required>
+                           <input type="number" step="0.01" name="odds_home" placeholder="Odd Casa (ex: 1.5)" class="p-2 border rounded" required>
+                           <input type="number" step="0.01" name="odds_draw" placeholder="Odd Empate (ex: 3.0)" class="p-2 border rounded" required>
+                           <input type="number" step="0.01" name="odds_away" placeholder="Odd Visitante (ex: 2.5)" class="p-2 border rounded" required>
                         </div>
                     </div>
                     <button type="submit" class="w-full bg-blue-500 text-white p-3 rounded hover:bg-blue-600 font-bold">Adicionar Jogo</button>
                 </form>
             </div>
             <div class="bg-white p-6 rounded shadow-md">
-                <div class="flex justify-between items-center mb-4">
-                    <h2 class="text-2xl font-semibold">Jogos Existentes</h2>
-                    <form action="/admin/clear-results" method="post" onsubmit="return confirmDelete();">
-                        <button type="submit" class="bg-red-600 text-white px-4 py-2 rounded hover:bg-red-700">Apagar Histórico de Resultados</button>
-                    </form>
-                </div>
+                <h2 class="text-2xl font-semibold mb-4">Jogos Existentes</h2>
                 <div class="space-y-4">${games.map(game => `
                     <div class="border p-4 rounded-lg">
                         <p class="font-bold text-lg">${game.home.name} vs ${game.away.name}</p>
@@ -322,9 +450,9 @@ app.get('/admin/edit-game/:id', authAdmin, async(req, res) => {
             <h1 class="text-3xl font-bold mb-6">Editar Odds para ${game.home.name} vs ${game.away.name}</h1>
             <div class="bg-white p-6 rounded shadow-md">
                 <form action="/admin/edit-game/${game._id}" method="post" class="space-y-4">
-                    <div><label class="block font-semibold">Odd Casa</label><input type="number" step="0.01" min="1.01" name="odds_home" value="${game.odds.home}" class="w-full p-2 border rounded" required></div>
-                    <div><label class="block font-semibold">Odd Empate</label><input type="number" step="0.01" min="1.01" name="odds_draw" value="${game.odds.draw}" class="w-full p-2 border rounded" required></div>
-                    <div><label class="block font-semibold">Odd Visitante</label><input type="number" step="0.01" min="1.01" name="odds_away" value="${game.odds.away}" class="w-full p-2 border rounded" required></div>
+                    <div><label class="block font-semibold">Odd Casa</label><input type="number" step="0.01" name="odds_home" value="${game.odds.home}" class="w-full p-2 border rounded" required></div>
+                    <div><label class="block font-semibold">Odd Empate</label><input type="number" step="0.01" name="odds_draw" value="${game.odds.draw}" class="w-full p-2 border rounded" required></div>
+                    <div><label class="block font-semibold">Odd Visitante</label><input type="number" step="0.01" name="odds_away" value="${game.odds.away}" class="w-full p-2 border rounded" required></div>
                     <button type="submit" class="w-full bg-blue-500 text-white p-3 rounded hover:bg-blue-600 font-bold">Salvar Alterações</button>
                     <a href="/admin/games" class="block text-center mt-2">Cancelar</a>
                 </form>
@@ -361,16 +489,6 @@ app.post('/admin/finalize-game/:id', authAdmin, async (req, res) => {
     } catch (error) { res.status(500).send("Erro ao finalizar jogo."); }
 });
 
-app.post('/admin/clear-results', authAdmin, async (req, res) => {
-    try {
-        await Game.deleteMany({ status: 'finalizado' });
-        res.redirect('/admin/games');
-    } catch (error) {
-        res.status(500).send("Erro ao apagar o histórico de resultados.");
-    }
-});
-
 
 const PORT = process.env.PORT || 10000;
 app.listen(PORT, () => console.log(`--> Servidor AgroBet a correr na porta ${PORT}`));
-
