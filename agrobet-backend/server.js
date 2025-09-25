@@ -53,7 +53,6 @@ const Bet = mongoose.model('Bet', BetSchema);
 mongoose.connect(process.env.MONGODB_URI).then(() => console.log("MongoDB conectado.")).catch(err => console.error(err));
 const app = express();
 
-// CORREÇÃO: Torna o CORS mais flexível se a variável de ambiente não estiver definida
 const corsOptions = {
     origin: process.env.FRONTEND_URL || '*', // Permite qualquer origem como fallback
     credentials: true
@@ -79,16 +78,17 @@ const authAdmin = (req, res, next) => {
     }
 };
 
-// --- Função para Odds Dinâmicas (LÓGICA REFEITA) ---
+// --- Função para Odds Dinâmicas (LÓGICA AJUSTADA) ---
 async function updateOdds(gameId) {
     try {
         const VIG = 0.10; // Margem de 10% para a casa
         const PAYOUT_RATE = 1 - VIG;
         const MIN_ODD = 1.01;
-        const MATURITY_POOL = 500; // Valor em R$ que o pool precisa atingir para que as odds sejam 100% baseadas no dinheiro
+        const MAX_ODD = 7.50; // Teto de segurança para as odds
+        const STARTING_POOL = 30; // Começa a ajustar as odds a partir de R$ 30
+        const MATURITY_POOL = 400; // Aos R$ 400, o peso do dinheiro é maior
 
         const game = await Game.findById(gameId);
-        // Só atualiza se o jogo estiver aberto e tiver as odds iniciais salvas
         if (!game || game.status !== 'aberto' || !game.initialOdds) return;
 
         const bets = await Bet.find({ gameId: gameId, status: 'approved' });
@@ -105,20 +105,24 @@ async function updateOdds(gameId) {
 
         const totalPool = totalBetHome + totalBetAway + totalBetDraw;
         
-        if (totalPool === 0) return; // Nenhuma aposta, não faz nada
+        // Apenas começa a ajustar após o valor inicial definido
+        if (totalPool < STARTING_POOL) return; 
 
-        // Calcula as odds puramente baseadas na distribuição do dinheiro
         const poolBasedOddHome = (totalPool * PAYOUT_RATE) / (totalBetHome || 1);
         const poolBasedOddAway = (totalPool * PAYOUT_RATE) / (totalBetAway || 1);
         const poolBasedOddDraw = (totalPool * PAYOUT_RATE) / (totalBetDraw || 1);
 
-        // Calcula o peso que as odds iniciais terão. Quanto mais dinheiro, menor o peso.
         const initialOddsWeight = Math.max(0, 1 - (totalPool / MATURITY_POOL));
 
-        // Calcula a odd final como uma média ponderada entre a odd do pool e a odd inicial
-        const newOddHome = Math.max(MIN_ODD, (poolBasedOddHome * (1 - initialOddsWeight)) + (game.initialOdds.home * initialOddsWeight));
-        const newOddAway = Math.max(MIN_ODD, (poolBasedOddAway * (1 - initialOddsWeight)) + (game.initialOdds.away * initialOddsWeight));
-        const newOddDraw = Math.max(MIN_ODD, (poolBasedOddDraw * (1 - initialOddsWeight)) + (game.initialOdds.draw * initialOddsWeight));
+        const calculatedOddHome = (poolBasedOddHome * (1 - initialOddsWeight)) + (game.initialOdds.home * initialOddsWeight);
+        const calculatedOddAway = (poolBasedOddAway * (1 - initialOddsWeight)) + (game.initialOdds.away * initialOddsWeight);
+        const calculatedOddDraw = (poolBasedOddDraw * (1 - initialOddsWeight)) + (game.initialOdds.draw * initialOddsWeight);
+        
+        // Aplica o teto de segurança (MAX_ODD) e o piso (MIN_ODD)
+        const newOddHome = Math.min(MAX_ODD, Math.max(MIN_ODD, calculatedOddHome));
+        const newOddAway = Math.min(MAX_ODD, Math.max(MIN_ODD, calculatedOddAway));
+        const newOddDraw = Math.min(MAX_ODD, Math.max(MIN_ODD, calculatedOddDraw));
+
 
         await Game.findByIdAndUpdate(gameId, {
             $set: {
@@ -178,7 +182,6 @@ app.post('/criar-pagamento', async (req, res) => {
             return res.status(400).json({ message: 'Este jogo não está mais aberto para apostas.' });
         }
         
-        // VERIFICA O LIMITE DE VALOR TOTAL POR UTILIZADOR NO JOGO
         const userBetsOnGame = await Bet.find({ gameId: gameId, 'user.pix': user.pix, status: 'approved' });
         const totalBetByUser = userBetsOnGame.reduce((acc, bet) => acc + bet.betValue, 0);
 
@@ -196,7 +199,6 @@ app.post('/criar-pagamento', async (req, res) => {
         const potentialPayout = value * odds;
         const betChoiceText = option === 'empate' ? 'Empate' : game[option].name;
         
-        // CORREÇÃO: Usa uma variável para o redirecionamento, com fallback para a variável antiga
         const redirectUrl = process.env.SUCCESS_REDIRECT_URL || process.env.FRONTEND_URL;
 
         const preferenceData = {
@@ -210,7 +212,7 @@ app.post('/criar-pagamento', async (req, res) => {
                     currency_id: 'BRL'
                 }],
                 back_urls: { success: redirectUrl, failure: redirectUrl, pending: redirectUrl },
-                auto_return: 'approved', // Redireciona automaticamente em caso de sucesso
+                auto_return: 'approved', 
                 notification_url: `${process.env.SERVER_URL}/webhook-mercadopago`,
                 metadata: {
                     game_id: gameId, user_pix: user.pix, user_name: user.name,
@@ -242,7 +244,6 @@ app.post('/webhook-mercadopago', async (req, res) => {
                     status: 'approved', odds: metadata.odds, potentialPayout: metadata.potential_payout
                 });
                 await newBet.save();
-                // A CADA APOSTA APROVADA, AS ODDS SÃO RECALCULADAS
                 updateOdds(metadata.game_id);
             }
         }
@@ -318,7 +319,6 @@ app.get('/admin/dashboard', authAdmin, (req, res) => {
         </div></body></html>`);
 });
 
-// NOVA ROTA: Relatório Financeiro
 app.get('/admin/financial-report', authAdmin, async (req, res) => {
     try {
         const bets = await Bet.find({ status: 'approved' }).populate('gameId').lean();
@@ -333,8 +333,8 @@ app.get('/admin/financial-report', authAdmin, async (req, res) => {
 
             for (const bet of betsForGame) {
                 let isWinner = false;
-                const gameResult = game.result; // 'home', 'away', 'empate'
-                const betChoice = bet.betChoice; // 'Nome do Time', 'Empate'
+                const gameResult = game.result; 
+                const betChoice = bet.betChoice; 
 
                 if (gameResult === 'empate' && betChoice === 'Empate') {
                     isWinner = true;
@@ -366,7 +366,6 @@ app.get('/admin/financial-report', authAdmin, async (req, res) => {
         
         const balance = totalLostValue - totalToPay;
 
-        // HTML da página de relatório
         res.send(`
             <!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><title>Relatório Financeiro</title><script src="https://cdn.tailwindcss.com"></script></head>
             <body class="bg-gray-100 p-4 md:p-8">
@@ -456,7 +455,6 @@ app.get('/admin/financial-report', authAdmin, async (req, res) => {
                         let csv = [];
                         for (let i = 0; i < rows.length; i++) {
                             const row = [], cols = rows[i].querySelectorAll('td, th');
-                            // Apenas incluir linhas visíveis
                             if (rows[i].style.display !== 'none') {
                                 for (let j = 0; j < cols.length; j++) {
                                     row.push('"' + cols[j].innerText.replace(/\\n/g, ' ') + '"');
