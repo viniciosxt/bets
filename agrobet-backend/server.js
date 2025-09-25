@@ -200,6 +200,7 @@ app.post('/criar-pagamento', async (req, res) => {
                     currency_id: 'BRL'
                 }],
                 back_urls: { success: process.env.FRONTEND_URL, failure: process.env.FRONTEND_URL, pending: process.env.FRONTEND_URL },
+                auto_return: 'approved', // Redireciona automaticamente em caso de sucesso
                 notification_url: `${process.env.SERVER_URL}/webhook-mercadopago`,
                 metadata: {
                     game_id: gameId, user_pix: user.pix, user_name: user.name,
