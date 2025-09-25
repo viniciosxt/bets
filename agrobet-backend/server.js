@@ -527,6 +527,7 @@ app.post('/admin/add-game', authAdmin, async (req, res) => {
             away: { name: away_name, logo: away_logo },
             date, competition,
             odds: { home: parseFloat(odds_home), draw: parseFloat(odds_draw), away: parseFloat(odds_away) },
+            initialOdds: { home: parseFloat(odds_home), draw: parseFloat(odds_draw), away: parseFloat(odds_away) },
             maxBetValue: parseFloat(max_bet_value)
         });
         await newGame.save();
