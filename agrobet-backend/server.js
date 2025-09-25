@@ -73,6 +73,8 @@ async function updateOdds(gameId) {
         const VIG = 0.10; // Margem de 10% para a casa
         const PAYOUT_RATE = 1 - VIG;
         const MIN_ODD = 1.01;
+        const ACTIVATION_THRESHOLD = 20; // Começa a ajustar odds após R$ 20 em apostas
+        const LIQUIDITY = 5; // Adiciona "liquidez" virtual para estabilizar o cálculo
 
         const game = await Game.findById(gameId);
         // Só atualiza odds de jogos abertos
@@ -90,15 +92,21 @@ async function updateOdds(gameId) {
             else if (bet.betChoice === 'Empate') totalBetDraw += bet.betValue;
         });
 
-        const totalPool = totalBetHome + totalBetAway + totalBetDraw;
+        const realTotalPool = totalBetHome + totalBetAway + totalBetDraw;
 
         // Só começa a ajustar depois de um valor mínimo para evitar flutuações extremas
-        if (totalPool < 10) return;
+        if (realTotalPool < ACTIVATION_THRESHOLD) return;
 
-        // Calcular as novas odds, usando 1 como valor mínimo para evitar divisão por zero
-        const newOddHome = Math.max(MIN_ODD, (totalPool * PAYOUT_RATE) / (totalBetHome || 1));
-        const newOddAway = Math.max(MIN_ODD, (totalPool * PAYOUT_RATE) / (totalBetAway || 1));
-        const newOddDraw = Math.max(MIN_ODD, (totalPool * PAYOUT_RATE) / (totalBetDraw || 1));
+        // Adiciona liquidez virtual para evitar saltos extremos
+        const totalPool = realTotalPool + (LIQUIDITY * 3);
+        const poolHome = totalBetHome + LIQUIDITY;
+        const poolAway = totalBetAway + LIQUIDITY;
+        const poolDraw = totalBetDraw + LIQUIDITY;
+
+        // Calcular as novas odds
+        const newOddHome = Math.max(MIN_ODD, (totalPool * PAYOUT_RATE) / poolHome);
+        const newOddAway = Math.max(MIN_ODD, (totalPool * PAYOUT_RATE) / poolAway);
+        const newOddDraw = Math.max(MIN_ODD, (totalPool * PAYOUT_RATE) / poolDraw);
 
         await Game.findByIdAndUpdate(gameId, {
             $set: {
@@ -575,4 +583,5 @@ app.post('/admin/finalize-game/:id', authAdmin, async (req, res) => {
 
 const PORT = process.env.PORT || 10000;
 app.listen(PORT, () => console.log(`--> Servidor AgroBet a correr na porta ${PORT}`));
+
 
