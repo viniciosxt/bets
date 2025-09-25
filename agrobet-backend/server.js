@@ -66,6 +66,54 @@ const authAdmin = (req, res, next) => {
     }
 };
 
+// --- Função para Odds Dinâmicas ---
+async function updateOdds(gameId) {
+    try {
+        const VIG = 0.10; // Margem de 10% para a casa
+        const PAYOUT_RATE = 1 - VIG;
+        const MIN_ODD = 1.01;
+
+        const game = await Game.findById(gameId);
+        // Só atualiza odds de jogos abertos
+        if (!game || game.status !== 'aberto') return;
+
+        const bets = await Bet.find({ gameId: gameId, status: 'approved' });
+
+        let totalBetHome = 0;
+        let totalBetAway = 0;
+        let totalBetDraw = 0;
+
+        bets.forEach(bet => {
+            if (bet.betChoice === game.home.name) totalBetHome += bet.betValue;
+            else if (bet.betChoice === game.away.name) totalBetAway += bet.betValue;
+            else if (bet.betChoice === 'Empate') totalBetDraw += bet.betValue;
+        });
+
+        const totalPool = totalBetHome + totalBetAway + totalBetDraw;
+
+        // Só começa a ajustar depois de um valor mínimo para evitar flutuações extremas
+        if (totalPool < 10) return;
+
+        // Calcular as novas odds, usando 1 como valor mínimo para evitar divisão por zero
+        const newOddHome = Math.max(MIN_ODD, (totalPool * PAYOUT_RATE) / (totalBetHome || 1));
+        const newOddAway = Math.max(MIN_ODD, (totalPool * PAYOUT_RATE) / (totalBetAway || 1));
+        const newOddDraw = Math.max(MIN_ODD, (totalPool * PAYOUT_RATE) / (totalBetDraw || 1));
+
+        await Game.findByIdAndUpdate(gameId, {
+            $set: {
+                'odds.home': newOddHome,
+                'odds.away': newOddAway,
+                'odds.draw': newOddDraw,
+            }
+        });
+
+        console.log(`Odds atualizadas para o jogo ${game._id}: C:${newOddHome.toFixed(2)}, E:${newOddDraw.toFixed(2)}, V:${newOddAway.toFixed(2)}`);
+
+    } catch (error) {
+        console.error(`Erro ao atualizar odds para o jogo ${gameId}:`, error);
+    }
+}
+
 // --- ROTAS PÚBLICAS (para o site principal) ---
 app.get('/', (req, res) => res.send('<h1>Servidor do AgroBet está no ar!</h1>'));
 
@@ -154,6 +202,8 @@ app.post('/webhook-mercadopago', async (req, res) => {
                     status: 'approved', odds: metadata.odds, potentialPayout: metadata.potential_payout
                 });
                 await newBet.save();
+                // A CADA APOSTA APROVADA, AS ODDS SÃO RECALCULADAS
+                updateOdds(metadata.game_id);
             }
         }
         res.sendStatus(200);
@@ -492,3 +542,4 @@ app.post('/admin/finalize-game/:id', authAdmin, async (req, res) => {
 
 const PORT = process.env.PORT || 10000;
 app.listen(PORT, () => console.log(`--> Servidor AgroBet a correr na porta ${PORT}`));
+
