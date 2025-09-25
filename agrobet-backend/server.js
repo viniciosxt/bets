@@ -52,7 +52,14 @@ const Bet = mongoose.model('Bet', BetSchema);
 // --- Conexão e Configuração do Servidor ---
 mongoose.connect(process.env.MONGODB_URI).then(() => console.log("MongoDB conectado.")).catch(err => console.error(err));
 const app = express();
-app.use(cors({ origin: process.env.FRONTEND_URL, credentials: true }));
+
+// CORREÇÃO: Torna o CORS mais flexível se a variável de ambiente não estiver definida
+const corsOptions = {
+    origin: process.env.FRONTEND_URL || '*', // Permite qualquer origem como fallback
+    credentials: true
+};
+app.use(cors(corsOptions));
+
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(cookieParser());
