@@ -157,10 +157,18 @@ app.post('/criar-pagamento', async (req, res) => {
             return res.status(400).json({ message: 'Este jogo não está mais aberto para apostas.' });
         }
         
-        // VERIFICA O LIMITE DE VALOR POR APOSTA
-        if (value > game.maxBetValue) {
-            return res.status(400).json({ message: `O valor máximo para esta aposta é R$ ${game.maxBetValue.toFixed(2)}.` });
+        // VERIFICA O LIMITE DE VALOR TOTAL POR UTILIZADOR NO JOGO
+        const userBetsOnGame = await Bet.find({ gameId: gameId, 'user.pix': user.pix, status: 'approved' });
+        const totalBetByUser = userBetsOnGame.reduce((acc, bet) => acc + bet.betValue, 0);
+
+        if ((totalBetByUser + value) > game.maxBetValue) {
+            const remainingValue = game.maxBetValue - totalBetByUser;
+            if (remainingValue <= 0) {
+                return res.status(400).json({ message: `Já atingiu o seu limite de aposta de R$ ${game.maxBetValue.toFixed(2)} para este jogo.` });
+            }
+            return res.status(400).json({ message: `O seu limite total para este jogo é R$ ${game.maxBetValue.toFixed(2)}. Ainda pode apostar até R$ ${remainingValue.toFixed(2)}.` });
         }
+
 
         const oddsKey = option === 'empate' ? 'draw' : option;
         const odds = game.odds[oddsKey];
