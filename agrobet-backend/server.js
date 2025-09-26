@@ -84,8 +84,8 @@ async function updateOdds(gameId) {
         const VIG = 0.10; // Margem de 10% para a casa
         const PAYOUT_RATE = 1 - VIG;
         const MIN_ODD = 1.01;
-        const MAX_ODD = 7.50; // Teto de segurança para as odds
-        const STARTING_POOL = 30; // Começa a ajustar as odds a partir de R$ 30
+        const MAX_ODD = 3.50; // Teto de segurança para as odds
+        const STARTING_POOL = 60; // Começa a ajustar as odds a partir de R$ 60
         const MATURITY_POOL = 400; // Aos R$ 400, o peso do dinheiro é maior
 
         const game = await Game.findById(gameId);
