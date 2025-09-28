@@ -27,25 +27,24 @@ const GameSchema = new mongoose.Schema({
         away: { type: Number, default: 1.5 },
         draw: { type: Number, default: 1.5 }
     },
-    initialOdds: { // Guarda as odds originais para um cálculo mais estável
+    initialOdds: {
         home: { type: Number },
         away: { type: Number },
         draw: { type: Number }
     },
-    maxBetValue: { type: Number, default: 35 } // Limite de valor por aposta
+    maxBetValue: { type: Number, default: 35 }
 });
 const Game = mongoose.model('Game', GameSchema);
 
 const BetSchema = new mongoose.Schema({
-    paymentId: { type: String, unique: true, sparse: true }, // ID único do pagamento do Mercado Pago para evitar duplicados
+    paymentId: { type: String, unique: true, sparse: true },
     gameId: { type: mongoose.Schema.Types.ObjectId, ref: 'Game' },
     gameTitle: String,
     betChoice: String,
     betValue: Number,
     date: Date,
     user: { name: String, pix: String },
-    status: { type: String, enum: ['approved', 'pending', 'refunded'], default: 'pending' }, // Status do pagamento do utilizador
-    payoutStatus: { type: String, enum: ['pending', 'paid'], default: 'pending' }, // Status do pagamento do prémio
+    status: { type: String, enum: ['approved', 'pending', 'refunded'], default: 'pending' },
     odds: { type: Number, required: true },
     potentialPayout: { type: Number, required: true }
 }));
@@ -56,7 +55,7 @@ mongoose.connect(process.env.MONGODB_URI).then(() => console.log("MongoDB conect
 const app = express();
 
 const corsOptions = {
-    origin: process.env.FRONTEND_URL || '*', // Permite qualquer origem como fallback
+    origin: process.env.FRONTEND_URL || '*',
     credentials: true
 };
 app.use(cors(corsOptions));
@@ -410,6 +409,36 @@ app.get('/admin/financial-report', authAdmin, async (req, res) => {
         
         const balance = totalLostValue - (totalToPay + totalPaid);
 
+        let reportTableRows = '';
+        if (reportData.length > 0) {
+            reportTableRows = reportData.map(bet => {
+                const statusClass = bet.betStatus === 'Ganhou' ? 'text-green-600' : (bet.betStatus === 'Perdeu' ? 'text-red-600' : (bet.betStatus === 'Paga' ? 'text-gray-600' : 'text-yellow-600'));
+                const rowClass = bet.betStatus === 'Reembolsada' ? 'bg-red-50' : (bet.betStatus === 'Paga' ? 'bg-gray-100' : '');
+                return `
+                    <tr class="border-b ${rowClass}" data-game-title="${bet.gameTitle}">
+                        <td class="py-3 px-4">${formatBetDate(bet.date)}</td>
+                        <td class="py-3 px-4">${bet.user.name}</td>
+                        <td class="py-3 px-4">${bet.user.pix}</td>
+                        <td class="py-3 px-4">${bet.gameTitle}</td>
+                        <td class="py-3 px-4">${bet.betChoice}</td>
+                        <td class="py-3 px-4">${bet.gameResult}</td>
+                        <td class="py-3 px-4">R$ ${bet.betValue.toFixed(2)}</td>
+                        <td class="py-3 px-4 font-semibold ${statusClass}">${bet.betStatus}</td>
+                        <td class="py-3 px-4 font-bold text-blue-700">R$ ${bet.amountToPay.toFixed(2)}</td>
+                    </tr>
+                `;
+            }).join('');
+        } else {
+            reportTableRows = `
+                <tr>
+                    <td colspan="9" class="text-center py-10 text-gray-500">
+                        <p class="font-bold text-lg">Nenhum dado para exibir no relatório.</p>
+                        <p>Isto pode acontecer porque ainda não há jogos finalizados que tenham apostas confirmadas.</p>
+                    </td>
+                </tr>
+            `;
+        }
+
         res.send(`
             <!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><title>Relatório Financeiro</title><script src="https://cdn.tailwindcss.com"></script></head>
             <body class="bg-gray-100 p-4 md:p-8">
@@ -421,14 +450,12 @@ app.get('/admin/financial-report', authAdmin, async (req, res) => {
                             <button id="export-csv" class="bg-green-600 text-white font-bold py-2 px-4 rounded-md hover:bg-green-700">Exportar para Excel (CSV)</button>
                         </div>
                     </div>
-
                     <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8 text-center">
                         <div class="bg-red-100 p-4 rounded-lg"><p class="text-sm text-red-700">Arrecadado (Perdas)</p><p class="text-2xl font-bold text-red-800">R$ ${totalLostValue.toFixed(2)}</p></div>
                         <div class="bg-blue-100 p-4 rounded-lg"><p class="text-sm text-blue-700">A Pagar (Ganhos)</p><p class="text-2xl font-bold text-blue-800">R$ ${totalToPay.toFixed(2)}</p></div>
                         <div class="bg-gray-200 p-4 rounded-lg"><p class="text-sm text-gray-700">Total Já Pago</p><p class="text-2xl font-bold text-gray-800">R$ ${totalPaid.toFixed(2)}</p></div>
                         <div class="bg-green-100 p-4 rounded-lg"><p class="text-sm text-green-700">Balanço (Lucro)</p><p class="text-2xl font-bold text-green-800">R$ ${balance.toFixed(2)}</p></div>
                     </div>
-                    
                     <div class="flex items-center mb-4">
                         <label for="gameFilter" class="mr-2 font-semibold">Filtrar por Jogo:</label>
                         <select id="gameFilter" class="p-2 border rounded-md">
@@ -436,7 +463,6 @@ app.get('/admin/financial-report', authAdmin, async (req, res) => {
                             ${finalizedGames.map(g => `<option value="${g.home.name} vs ${g.away.name}">${g.home.name} vs ${g.away.name}</option>`).join('')}
                         </select>
                     </div>
-
                     <div class="overflow-x-auto">
                         <table id="report-table" class="min-w-full bg-white">
                             <thead class="bg-gray-800 text-white">
@@ -453,19 +479,7 @@ app.get('/admin/financial-report', authAdmin, async (req, res) => {
                                 </tr>
                             </thead>
                             <tbody>
-                                ${reportData.map(bet => `
-                                    <tr class="border-b ${bet.betStatus === 'Reembolsada' ? 'bg-red-50' : (bet.betStatus === 'Paga' ? 'bg-gray-100' : '')}" data-game-title="${bet.gameTitle}">
-                                        <td class="py-3 px-4">${formatBetDate(bet.date)}</td>
-                                        <td class="py-3 px-4">${bet.user.name}</td>
-                                        <td class="py-3 px-4">${bet.user.pix}</td>
-                                        <td class="py-3 px-4">${bet.gameTitle}</td>
-                                        <td class="py-3 px-4">${bet.betChoice}</td>
-                                        <td class="py-3 px-4">${bet.gameResult}</td>
-                                        <td class="py-3 px-4">R$ ${bet.betValue.toFixed(2)}</td>
-                                        <td class="py-3 px-4 font-semibold ${bet.betStatus === 'Ganhou' ? 'text-green-600' : (bet.betStatus === 'Perdeu' ? 'text-red-600' : (bet.betStatus === 'Paga' ? 'text-gray-600' : 'text-yellow-600'))}">${bet.betStatus}</td>
-                                        <td class="py-3 px-4 font-bold text-blue-700">R$ ${bet.amountToPay.toFixed(2)}</td>
-                                    </tr>
-                                `).join('')}
+                                ${reportTableRows}
                             </tbody>
                         </table>
                     </div>
@@ -482,7 +496,6 @@ app.get('/admin/financial-report', authAdmin, async (req, res) => {
                             }
                         });
                     });
-
                     function downloadCSV(csv, filename) {
                         const csvFile = new Blob(["\\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
                         const link = document.createElement("a");
@@ -493,7 +506,6 @@ app.get('/admin/financial-report', authAdmin, async (req, res) => {
                         link.click();
                         document.body.removeChild(link);
                     }
-
                     document.getElementById('export-csv').addEventListener('click', function() {
                         const table = document.getElementById('report-table');
                         const rows = table.querySelectorAll('tr');
@@ -508,14 +520,13 @@ app.get('/admin/financial-report', authAdmin, async (req, res) => {
                             }
                         }
                         const now = new Date();
-                        const timestamp = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}_${String(now.getHours()).padStart(2, '0')}-${String(now.getMinutes()).padStart(2, '0')}`;
-                        const filename = `relatorio_financeiro_${timestamp}.csv`;
+                        const timestamp = \`\${now.getFullYear()}-\${String(now.getMonth() + 1).padStart(2, '0')}-\${String(now.getDate()).padStart(2, '0')}_\${String(now.getHours()).padStart(2, '0')}-\${String(now.getMinutes()).padStart(2, '0')}\`;
+                        const filename = \`relatorio_financeiro_\${timestamp}.csv\`;
                         downloadCSV(csv.join('\\n'), filename);
                     });
                 </script>
             </body></html>
         `);
-
     } catch (error) {
         console.error("Erro ao gerar relatório financeiro:", error);
         res.status(500).send("Erro ao gerar o relatório financeiro.");
@@ -551,6 +562,25 @@ app.get('/admin/payment-summary', authAdmin, async (req, res) => {
             }
         }
 
+        let paymentRows = '';
+        if (Object.keys(paymentsByUser).length > 0) {
+            paymentRows = Object.entries(paymentsByUser).map(([pix, data]) => `
+                <tr class="border-b">
+                    <td class="py-3 px-4">${data.name}</td>
+                    <td class="py-3 px-4">${pix}</td>
+                    <td class="py-3 px-4 font-bold text-blue-700">R$ ${data.totalToPay.toFixed(2)}</td>
+                    <td class="py-3 px-4 text-center">
+                        <form action="/admin/mark-user-paid" method="POST" onsubmit="return confirm('Tem a certeza que já pagou a ${data.name}? Esta ação não pode ser desfeita.');">
+                            <input type="hidden" name="userPix" value="${pix}">
+                            <button type="submit" class="bg-green-500 text-white font-bold py-1 px-3 rounded-md hover:bg-green-600 text-sm">Marcar como Pago</button>
+                        </form>
+                    </td>
+                </tr>
+            `).join('');
+        } else {
+            paymentRows = `<tr><td colspan="4" class="text-center py-10 text-gray-500">Nenhum pagamento pendente no momento.</td></tr>`;
+        }
+
         res.send(`
              <!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><title>Resumo de Pagamentos</title><script src="https://cdn.tailwindcss.com"></script></head>
             <body class="bg-gray-100 p-4 md:p-8">
@@ -570,21 +600,7 @@ app.get('/admin/payment-summary', authAdmin, async (req, res) => {
                                 </tr>
                             </thead>
                             <tbody>
-                                ${Object.keys(paymentsByUser).length > 0 ? Object.entries(paymentsByUser).map(([pix, data]) => `
-                                    <tr class="border-b">
-                                        <td class="py-3 px-4">${data.name}</td>
-                                        <td class="py-3 px-4">${pix}</td>
-                                        <td class="py-3 px-4 font-bold text-blue-700">R$ ${data.totalToPay.toFixed(2)}</td>
-                                        <td class="py-3 px-4 text-center">
-                                            <form action="/admin/mark-user-paid" method="POST" onsubmit="return confirm('Tem a certeza que já pagou a ${data.name}? Esta ação não pode ser desfeita.');">
-                                                <input type="hidden" name="userPix" value="${pix}">
-                                                <button type="submit" class="bg-green-500 text-white font-bold py-1 px-3 rounded-md hover:bg-green-600 text-sm">Marcar como Pago</button>
-                                            </form>
-                                        </td>
-                                    </tr>
-                                `).join('') : `
-                                <tr><td colspan="4" class="text-center py-10 text-gray-500">Nenhum pagamento pendente no momento.</td></tr>
-                                `}
+                                ${paymentRows}
                             </tbody>
                         </table>
                     </div>
@@ -688,6 +704,16 @@ app.post('/admin/logout', (req, res) => {
 app.get('/admin/users', authAdmin, async (req, res) => {
     try {
         const users = await User.find({});
+        const userRows = users.map(user => `
+            <tr class="border-b">
+                <td class="py-3 px-4">${user.name}</td>
+                <td class="py-3 px-4">${user.pix}</td>
+                <td class="py-3 px-4 text-center">
+                    <a href="/admin/edit-user/${user._id}" class="bg-green-500 text-white font-bold py-1 px-3 rounded-md hover:bg-green-600 text-sm">Editar</a>
+                </td>
+            </tr>
+        `).join('');
+
         res.send(`
             <!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><title>Gerir Utilizadores</title><script src="https://cdn.tailwindcss.com"></script></head>
             <body class="bg-gray-100 p-4 md:p-8">
@@ -706,15 +732,7 @@ app.get('/admin/users', authAdmin, async (req, res) => {
                                 </tr>
                             </thead>
                             <tbody>
-                                ${users.map(user => `
-                                    <tr class="border-b">
-                                        <td class="py-3 px-4">${user.name}</td>
-                                        <td class="py-3 px-4">${user.pix}</td>
-                                        <td class="py-3 px-4 text-center">
-                                            <a href="/admin/edit-user/${user._id}" class="bg-green-500 text-white font-bold py-1 px-3 rounded-md hover:bg-green-600 text-sm">Editar</a>
-                                        </td>
-                                    </tr>
-                                `).join('')}
+                                ${userRows}
                             </tbody>
                         </table>
                     </div>
@@ -770,16 +788,20 @@ app.post('/admin/edit-user/:id', authAdmin, async (req, res) => {
 app.get('/admin/games', authAdmin, async (req, res) => {
     try {
         const games = await Game.find().sort({ date: -1 });
-        let gameRows = games.map(game => `
-            <div class="border p-4 rounded-lg">
-                <p class="font-bold text-lg">${game.home.name} vs ${game.away.name}</p>
-                <p class="text-sm">Odds: Casa ${game.odds.home.toFixed(2)} | Empate ${game.odds.draw.toFixed(2)} | Visitante ${game.odds.away.toFixed(2)}</p>
-                <p>Status: <span class="font-semibold">${game.status}</span> | Resultado: <span class="font-semibold">${game.result}</span> | Limite Aposta: <span class="font-semibold">R$ ${game.maxBetValue.toFixed(2)}</span></p>
-                <div class="mt-2">
-                    ${game.status === 'aberto' ? `<a href="/admin/edit-game/${game._id}" class="bg-blue-500 text-white px-3 py-1 rounded text-sm mr-2">Editar Jogo</a><form action="/admin/close-game/${game._id}" method="post" class="inline-block"><button class="bg-yellow-500 text-white px-3 py-1 rounded text-sm">Fechar Apostas</button></form>` : ''}
-                    ${game.status === 'fechado' ? `<form action="/admin/finalize-game/${game._id}" method="post"><select name="result" class="p-2 border rounded"><option value="home">Vencedor: ${game.home.name}</option><option value="away">Vencedor: ${game.away.name}</option><option value="empate">Empate</option></select><button type="submit" class="bg-green-500 text-white px-3 py-1 rounded text-sm ml-2">Finalizar Jogo</button></form>` : ''}
-                </div>
-            </div>`).join('');
+        const gameRows = games.map(game => {
+            const openControls = `<a href="/admin/edit-game/${game._id}" class="bg-blue-500 text-white px-3 py-1 rounded text-sm mr-2">Editar Jogo</a><form action="/admin/close-game/${game._id}" method="post" class="inline-block"><button class="bg-yellow-500 text-white px-3 py-1 rounded text-sm">Fechar Apostas</button></form>`;
+            const closedControls = `<form action="/admin/finalize-game/${game._id}" method="post"><select name="result" class="p-2 border rounded"><option value="home">Vencedor: ${game.home.name}</option><option value="away">Vencedor: ${game.away.name}</option><option value="empate">Empate</option></select><button type="submit" class="bg-green-500 text-white px-3 py-1 rounded text-sm ml-2">Finalizar Jogo</button></form>`;
+            return `
+                <div class="border p-4 rounded-lg">
+                    <p class="font-bold text-lg">${game.home.name} vs ${game.away.name}</p>
+                    <p class="text-sm">Odds: Casa ${game.odds.home.toFixed(2)} | Empate ${game.odds.draw.toFixed(2)} | Visitante ${game.odds.away.toFixed(2)}</p>
+                    <p>Status: <span class="font-semibold">${game.status}</span> | Resultado: <span class="font-semibold">${game.result}</span> | Limite Aposta: <span class="font-semibold">R$ ${game.maxBetValue.toFixed(2)}</span></p>
+                    <div class="mt-2">
+                        ${game.status === 'aberto' ? openControls : ''}
+                        ${game.status === 'fechado' ? closedControls : ''}
+                    </div>
+                </div>`;
+        }).join('');
         
         res.send(`<!DOCTYPE html><html lang="pt-BR"><head><title>Gerir Jogos</title><script src="https://cdn.tailwindcss.com"></script></head>
             <body class="bg-gray-100 p-8"><div class="container mx-auto"><h1 class="text-3xl font-bold mb-6">Gerir Jogos</h1>
