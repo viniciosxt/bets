@@ -507,8 +507,8 @@ app.get('/admin/financial-report', authAdmin, async (req, res) => {
                             }
                         }
                         const now = new Date();
-                        const timestamp = \`\${now.getFullYear()}-\${String(now.getMonth() + 1).padStart(2, '0')}-\${String(now.getDate()).padStart(2, '0')}_\${String(now.getHours()).padStart(2, '0')}-\${String(now.getMinutes()).padStart(2, '0')}\`;
-                        const filename = \`relatorio_financeiro_\${timestamp}.csv\`;
+                        const timestamp = `\${now.getFullYear()}-\${String(now.getMonth() + 1).padStart(2, '0')}-\${String(now.getDate()).padStart(2, '0')}_\${String(now.getHours()).padStart(2, '0')}-\${String(now.getMinutes()).padStart(2, '0')}`;
+                        const filename = `relatorio_financeiro_\${timestamp}.csv`;
                         downloadCSV(csv.join('\\n'), filename);
                     });
                 </script>
@@ -848,4 +848,3 @@ app.post('/admin/finalize-game/:id', authAdmin, async (req, res) => {
 
 const PORT = process.env.PORT || 10000;
 app.listen(PORT, () => console.log(`--> Servidor AgroBet a correr na porta ${PORT}`));
-
