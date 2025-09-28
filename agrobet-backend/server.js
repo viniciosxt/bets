@@ -453,7 +453,7 @@ app.get('/admin/financial-report', authAdmin, async (req, res) => {
                                 </tr>
                             </thead>
                             <tbody>
-                                ${reportData.length > 0 ? reportData.map(bet => `
+                                ${reportData.map(bet => `
                                     <tr class="border-b ${bet.betStatus === 'Reembolsada' ? 'bg-red-50' : (bet.betStatus === 'Paga' ? 'bg-gray-100' : '')}" data-game-title="${bet.gameTitle}">
                                         <td class="py-3 px-4">${formatBetDate(bet.date)}</td>
                                         <td class="py-3 px-4">${bet.user.name}</td>
@@ -465,14 +465,7 @@ app.get('/admin/financial-report', authAdmin, async (req, res) => {
                                         <td class="py-3 px-4 font-semibold ${bet.betStatus === 'Ganhou' ? 'text-green-600' : (bet.betStatus === 'Perdeu' ? 'text-red-600' : (bet.betStatus === 'Paga' ? 'text-gray-600' : 'text-yellow-600'))}">${bet.betStatus}</td>
                                         <td class="py-3 px-4 font-bold text-blue-700">R$ ${bet.amountToPay.toFixed(2)}</td>
                                     </tr>
-                                `).join('') : `
-                                <tr>
-                                    <td colspan="9" class="text-center py-10 text-gray-500">
-                                        <p class="font-bold text-lg">Nenhum dado para exibir no relatório.</p>
-                                        <p>Isto pode acontecer porque ainda não há jogos finalizados que tenham apostas confirmadas.</p>
-                                    </td>
-                                </tr>
-                                `}
+                                `).join('')}
                             </tbody>
                         </table>
                     </div>
@@ -777,6 +770,17 @@ app.post('/admin/edit-user/:id', authAdmin, async (req, res) => {
 app.get('/admin/games', authAdmin, async (req, res) => {
     try {
         const games = await Game.find().sort({ date: -1 });
+        let gameRows = games.map(game => `
+            <div class="border p-4 rounded-lg">
+                <p class="font-bold text-lg">${game.home.name} vs ${game.away.name}</p>
+                <p class="text-sm">Odds: Casa ${game.odds.home.toFixed(2)} | Empate ${game.odds.draw.toFixed(2)} | Visitante ${game.odds.away.toFixed(2)}</p>
+                <p>Status: <span class="font-semibold">${game.status}</span> | Resultado: <span class="font-semibold">${game.result}</span> | Limite Aposta: <span class="font-semibold">R$ ${game.maxBetValue.toFixed(2)}</span></p>
+                <div class="mt-2">
+                    ${game.status === 'aberto' ? `<a href="/admin/edit-game/${game._id}" class="bg-blue-500 text-white px-3 py-1 rounded text-sm mr-2">Editar Jogo</a><form action="/admin/close-game/${game._id}" method="post" class="inline-block"><button class="bg-yellow-500 text-white px-3 py-1 rounded text-sm">Fechar Apostas</button></form>` : ''}
+                    ${game.status === 'fechado' ? `<form action="/admin/finalize-game/${game._id}" method="post"><select name="result" class="p-2 border rounded"><option value="home">Vencedor: ${game.home.name}</option><option value="away">Vencedor: ${game.away.name}</option><option value="empate">Empate</option></select><button type="submit" class="bg-green-500 text-white px-3 py-1 rounded text-sm ml-2">Finalizar Jogo</button></form>` : ''}
+                </div>
+            </div>`).join('');
+        
         res.send(`<!DOCTYPE html><html lang="pt-BR"><head><title>Gerir Jogos</title><script src="https://cdn.tailwindcss.com"></script></head>
             <body class="bg-gray-100 p-8"><div class="container mx-auto"><h1 class="text-3xl font-bold mb-6">Gerir Jogos</h1>
             <div class="bg-white p-6 rounded shadow-md mb-8">
@@ -808,17 +812,7 @@ app.get('/admin/games', authAdmin, async (req, res) => {
             </div>
             <div class="bg-white p-6 rounded shadow-md">
                 <h2 class="text-2xl font-semibold mb-4">Jogos Existentes</h2>
-                <div class="space-y-4">${games.map(game => `
-                    <div class="border p-4 rounded-lg">
-                        <p class="font-bold text-lg">${game.home.name} vs ${game.away.name}</p>
-                        <p class="text-sm">Odds: Casa ${game.odds.home.toFixed(2)} | Empate ${game.odds.draw.toFixed(2)} | Visitante ${game.odds.away.toFixed(2)}</p>
-                        <p>Status: <span class="font-semibold">${game.status}</span> | Resultado: <span class="font-semibold">${game.result}</span> | Limite Aposta: <span class="font-semibold">R$ ${game.maxBetValue.toFixed(2)}</span></p>
-                        <div class="mt-2">
-                            ${game.status === 'aberto' ? `<a href="/admin/edit-game/${game._id}" class="bg-blue-500 text-white px-3 py-1 rounded text-sm mr-2">Editar Jogo</a><form action="/admin/close-game/${game._id}" method="post" class="inline-block"><button class="bg-yellow-500 text-white px-3 py-1 rounded text-sm">Fechar Apostas</button></form>` : ''}
-                            ${game.status === 'fechado' ? `<form action="/admin/finalize-game/${game._id}" method="post"><select name="result" class="p-2 border rounded"><option value="home">Vencedor: ${game.home.name}</option><option value="away">Vencedor: ${game.away.name}</option><option value="empate">Empate</option></select><button type="submit" class="bg-green-500 text-white px-3 py-1 rounded text-sm ml-2">Finalizar Jogo</button></form>` : ''}
-                        </div>
-                    </div>`).join('')}
-                </div></div></div></body></html>`);
+                <div class="space-y-4">${gameRows}</div></div></div></body></html>`);
     } catch (error) { res.status(500).send("Erro ao carregar jogos."); }
 });
 
