@@ -331,12 +331,13 @@ app.post('/admin/login', (req, res) => {
 app.get('/admin/dashboard', authAdmin, (req, res) => {
     res.send(`
         <!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><title>Painel de Administração</title><script src="https://cdn.tailwindcss.com"></script></head>
-        <body class="bg-gray-200 min-h-screen flex items-center justify-center"><div class="container mx-auto p-8 bg-white rounded-lg shadow-lg max-w-5xl text-center">
-        <h1 class="text-4xl font-bold mb-8 text-gray-800">Painel de Administração</h1><div class="grid grid-cols-1 md:grid-cols-4 gap-6">
+        <body class="bg-gray-200 min-h-screen flex items-center justify-center"><div class="container mx-auto p-8 bg-white rounded-lg shadow-lg max-w-6xl text-center">
+        <h1 class="text-4xl font-bold mb-8 text-gray-800">Painel de Administração</h1><div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
         <a href="/admin/games" class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-6 px-4 rounded-lg text-xl transition-transform transform hover:scale-105 flex flex-col justify-center">Gerir Jogos</a>
         <a href="/relatorio" target="_blank" class="bg-gray-500 hover:bg-gray-600 text-white font-bold py-6 px-4 rounded-lg text-xl transition-transform transform hover:scale-105 flex flex-col justify-center">Relatório Geral<span class="text-xs font-normal">(Todas as apostas)</span></a>
         <a href="/admin/financial-report" target="_blank" class="bg-green-600 hover:bg-green-700 text-white font-bold py-6 px-4 rounded-lg text-xl transition-transform transform hover:scale-105 flex flex-col justify-center">Relatório Financeiro<span class="text-xs font-normal">(Balanço e Detalhes)</span></a>
         <a href="/admin/payment-summary" target="_blank" class="bg-yellow-500 hover:bg-yellow-600 text-white font-bold py-6 px-4 rounded-lg text-xl transition-transform transform hover:scale-105 flex flex-col justify-center">Resumo de Pagamentos<span class="text-xs font-normal">(Valores por pessoa)</span></a>
+        <a href="/admin/maintenance" class="bg-red-700 hover:bg-red-800 text-white font-bold py-6 px-4 rounded-lg text-xl transition-transform transform hover:scale-105 flex flex-col justify-center">Manutenção<span class="text-xs font-normal">(Limpar Histórico)</span></a>
         </div><form action="/admin/logout" method="post" class="mt-8"><button type="submit" class="bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-6 rounded-lg">Sair</button></form>
         </div></body></html>`);
 });
@@ -623,6 +624,47 @@ app.post('/admin/mark-user-paid', authAdmin, async (req, res) => {
     } catch (error) {
         console.error("Erro ao marcar utilizador como pago:", error);
         res.status(500).send("Erro ao marcar utilizador como pago.");
+    }
+});
+
+app.get('/admin/maintenance', authAdmin, (req, res) => {
+    res.send(`
+        <!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><title>Manutenção</title><script src="https://cdn.tailwindcss.com"></script></head>
+        <body class="bg-gray-100 p-4 md:p-8">
+            <div class="container mx-auto bg-white p-6 rounded-lg shadow-md max-w-4xl">
+                <div class="flex justify-between items-center mb-6">
+                    <h1 class="text-3xl font-bold text-gray-800">Manutenção do Site</h1>
+                    <a href="/admin/dashboard" class="bg-blue-500 text-white font-bold py-2 px-4 rounded-md hover:bg-blue-600">Voltar ao Dashboard</a>
+                </div>
+                
+                <div class="bg-red-100 border-l-4 border-red-500 text-red-800 p-4 rounded-md" role="alert">
+                    <p class="font-bold text-lg">Atenção: Ações Irreversíveis</p>
+                    <p>As ferramentas abaixo realizam exclusões permanentes na base de dados. Use com extrema cautela.</p>
+                </div>
+                
+                <div class="mt-8 border-t pt-6">
+                    <h2 class="text-2xl font-bold text-gray-700 mb-2">Limpar Histórico da Rodada</h2>
+                    <p class="mb-4 text-gray-600">Esta ação foi desenhada para reiniciar o site para uma nova rodada de apostas. Ela irá apagar <strong>TODAS as apostas</strong> (ganhas, perdidas, pagas, reembolsadas, etc.) e <strong>TODOS os jogos com status "finalizado"</strong>. Os jogos abertos e os utilizadores não serão afetados.</p>
+                    <form action="/admin/clear-history" method="POST" onsubmit="return confirm('Tem a certeza ABSOLUTA que deseja apagar todo o histórico de apostas e jogos finalizados? Esta ação não pode ser desfeita.');">
+                        <button type="submit" class="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-3 px-4 rounded-lg text-lg">Apagar Histórico Agora</button>
+                    </form>
+                </div>
+            </div>
+        </body></html>
+    `);
+});
+
+app.post('/admin/clear-history', authAdmin, async (req, res) => {
+    try {
+        const deletedBetsResult = await Bet.deleteMany({});
+        const deletedGamesResult = await Game.deleteMany({ status: 'finalizado' });
+        
+        console.log(`Histórico limpo: ${deletedBetsResult.deletedCount} apostas e ${deletedGamesResult.deletedCount} jogos finalizados foram apagados.`);
+
+        res.redirect('/admin/maintenance');
+    } catch (error) {
+        console.error("Erro ao limpar o histórico:", error);
+        res.status(500).send("Ocorreu um erro ao tentar limpar o histórico.");
     }
 });
 
