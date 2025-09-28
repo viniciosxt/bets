@@ -80,6 +80,18 @@ const authAdmin = (req, res, next) => {
     }
 };
 
+// --- Função Auxiliar para Formatar Data ---
+const formatBetDate = (dateString) => {
+    if (!dateString) return '-';
+    const date = new Date(dateString);
+    const day = String(date.getDate()).padStart(2, '0');
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const year = String(date.getFullYear()).slice(-2);
+    const hours = String(date.getHours()).padStart(2, '0');
+    const minutes = String(date.getMinutes()).padStart(2, '0');
+    return `${day}/${month}/${year} ${hours}:${minutes}`;
+};
+
 // --- Função para Odds Dinâmicas ---
 async function updateOdds(gameId) {
     try {
@@ -296,7 +308,7 @@ app.get('/relatorio', async (req, res) => {
             <tr><th class="py-3 px-4 text-left">Data</th><th class="py-3 px-4 text-left">Utilizador</th><th class="py-3 px-4 text-left">Jogo</th><th class="py-3 px-4 text-left">Palpite</th><th class="py-3 px-4 text-left">Valor</th><th class="py-3 px-4 text-left">Status</th><th class="py-3 px-4 text-left">Retorno Pot.</th></tr>
             </thead><tbody>`;
         bets.forEach(bet => {
-            html += `<tr class="border-b"><td class="py-3 px-4">${new Date(bet.date).toLocaleString('pt-BR')}</td><td class="py-3 px-4">${bet.user.name}</td><td class="py-3 px-4">${bet.gameTitle}</td><td class="py-3 px-4">${bet.betChoice}</td><td class="py-3 px-4">R$ ${bet.betValue.toFixed(2)}</td><td class="py-3 px-4 font-semibold ${bet.status === 'refunded' ? 'text-red-500' : 'text-green-500'}">${bet.status}</td><td class="py-3 px-4 font-semibold text-gray-700">R$ ${bet.potentialPayout.toFixed(2)}</td></tr>`;
+            html += `<tr class="border-b"><td class="py-3 px-4">${formatBetDate(bet.date)}</td><td class="py-3 px-4">${bet.user.name}</td><td class="py-3 px-4">${bet.gameTitle}</td><td class="py-3 px-4">${bet.betChoice}</td><td class="py-3 px-4">R$ ${bet.betValue.toFixed(2)}</td><td class="py-3 px-4 font-semibold ${bet.status === 'refunded' ? 'text-red-500' : 'text-green-500'}">${bet.status}</td><td class="py-3 px-4 font-semibold text-gray-700">R$ ${bet.potentialPayout.toFixed(2)}</td></tr>`;
         });
         html += `</tbody></table></div></div></body></html>`;
         res.send(html);
@@ -332,8 +344,9 @@ app.get('/admin/dashboard', authAdmin, (req, res) => {
     res.send(`
         <!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><title>Painel de Administração</title><script src="https://cdn.tailwindcss.com"></script></head>
         <body class="bg-gray-200 min-h-screen flex items-center justify-center"><div class="container mx-auto p-8 bg-white rounded-lg shadow-lg max-w-6xl text-center">
-        <h1 class="text-4xl font-bold mb-8 text-gray-800">Painel de Administração</h1><div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
+        <h1 class="text-4xl font-bold mb-8 text-gray-800">Painel de Administração</h1><div class="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-3 gap-6">
         <a href="/admin/games" class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-6 px-4 rounded-lg text-xl transition-transform transform hover:scale-105 flex flex-col justify-center">Gerir Jogos</a>
+        <a href="/admin/users" class="bg-indigo-500 hover:bg-indigo-600 text-white font-bold py-6 px-4 rounded-lg text-xl transition-transform transform hover:scale-105 flex flex-col justify-center">Gerir Utilizadores</a>
         <a href="/relatorio" target="_blank" class="bg-gray-500 hover:bg-gray-600 text-white font-bold py-6 px-4 rounded-lg text-xl transition-transform transform hover:scale-105 flex flex-col justify-center">Relatório Geral<span class="text-xs font-normal">(Todas as apostas)</span></a>
         <a href="/admin/financial-report" target="_blank" class="bg-green-600 hover:bg-green-700 text-white font-bold py-6 px-4 rounded-lg text-xl transition-transform transform hover:scale-105 flex flex-col justify-center">Relatório Financeiro<span class="text-xs font-normal">(Balanço e Detalhes)</span></a>
         <a href="/admin/payment-summary" target="_blank" class="bg-yellow-500 hover:bg-yellow-600 text-white font-bold py-6 px-4 rounded-lg text-xl transition-transform transform hover:scale-105 flex flex-col justify-center">Resumo de Pagamentos<span class="text-xs font-normal">(Valores por pessoa)</span></a>
@@ -428,6 +441,7 @@ app.get('/admin/financial-report', authAdmin, async (req, res) => {
                         <table id="report-table" class="min-w-full bg-white">
                             <thead class="bg-gray-800 text-white">
                                 <tr>
+                                    <th class="py-3 px-4 text-left">Data</th>
                                     <th class="py-3 px-4 text-left">Utilizador</th>
                                     <th class="py-3 px-4 text-left">Chave PIX</th>
                                     <th class="py-3 px-4 text-left">Jogo</th>
@@ -441,6 +455,7 @@ app.get('/admin/financial-report', authAdmin, async (req, res) => {
                             <tbody>
                                 ${reportData.length > 0 ? reportData.map(bet => `
                                     <tr class="border-b ${bet.betStatus === 'Reembolsada' ? 'bg-red-50' : (bet.betStatus === 'Paga' ? 'bg-gray-100' : '')}" data-game-title="${bet.gameTitle}">
+                                        <td class="py-3 px-4">${formatBetDate(bet.date)}</td>
                                         <td class="py-3 px-4">${bet.user.name}</td>
                                         <td class="py-3 px-4">${bet.user.pix}</td>
                                         <td class="py-3 px-4">${bet.gameTitle}</td>
@@ -452,7 +467,7 @@ app.get('/admin/financial-report', authAdmin, async (req, res) => {
                                     </tr>
                                 `).join('') : `
                                 <tr>
-                                    <td colspan="8" class="text-center py-10 text-gray-500">
+                                    <td colspan="9" class="text-center py-10 text-gray-500">
                                         <p class="font-bold text-lg">Nenhum dado para exibir no relatório.</p>
                                         <p>Isto pode acontecer porque ainda não há jogos finalizados que tenham apostas confirmadas.</p>
                                     </td>
@@ -499,7 +514,10 @@ app.get('/admin/financial-report', authAdmin, async (req, res) => {
                                 csv.push(row.join(','));
                             }
                         }
-                        downloadCSV(csv.join('\\n'), 'relatorio_financeiro_detalhado.csv');
+                        const now = new Date();
+                        const timestamp = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}_${String(now.getHours()).padStart(2, '0')}-${String(now.getMinutes()).padStart(2, '0')}`;
+                        const filename = `relatorio_financeiro_${timestamp}.csv`;
+                        downloadCSV(csv.join('\\n'), filename);
                     });
                 </script>
             </body></html>
@@ -592,7 +610,6 @@ app.post('/admin/mark-user-paid', authAdmin, async (req, res) => {
     try {
         const { userPix } = req.body;
         
-        // Encontra todas as apostas VENCEDORAS e PENDENTES de um utilizador
         const betsToUpdate = await Bet.find({ 
             'user.pix': userPix, 
             status: 'approved', 
@@ -672,6 +689,89 @@ app.post('/admin/clear-history', authAdmin, async (req, res) => {
 app.post('/admin/logout', (req, res) => {
     res.clearCookie('admin_token');
     res.redirect('/admin');
+});
+
+// ROTAS PARA GERIR UTILIZADORES
+app.get('/admin/users', authAdmin, async (req, res) => {
+    try {
+        const users = await User.find({});
+        res.send(`
+            <!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><title>Gerir Utilizadores</title><script src="https://cdn.tailwindcss.com"></script></head>
+            <body class="bg-gray-100 p-4 md:p-8">
+                <div class="container mx-auto bg-white p-6 rounded-lg shadow-md">
+                    <div class="flex justify-between items-center mb-6">
+                        <h1 class="text-3xl font-bold text-gray-800">Gerir Utilizadores</h1>
+                        <a href="/admin/dashboard" class="bg-blue-500 text-white font-bold py-2 px-4 rounded-md hover:bg-blue-600">Voltar ao Dashboard</a>
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full bg-white">
+                            <thead class="bg-gray-800 text-white">
+                                <tr>
+                                    <th class="py-3 px-4 text-left">Nome</th>
+                                    <th class="py-3 px-4 text-left">Chave PIX</th>
+                                    <th class="py-3 px-4 text-center">Ação</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${users.map(user => `
+                                    <tr class="border-b">
+                                        <td class="py-3 px-4">${user.name}</td>
+                                        <td class="py-3 px-4">${user.pix}</td>
+                                        <td class="py-3 px-4 text-center">
+                                            <a href="/admin/edit-user/${user._id}" class="bg-green-500 text-white font-bold py-1 px-3 rounded-md hover:bg-green-600 text-sm">Editar</a>
+                                        </td>
+                                    </tr>
+                                `).join('')}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </body></html>
+        `);
+    } catch (error) {
+        res.status(500).send("Erro ao carregar utilizadores.");
+    }
+});
+
+app.get('/admin/edit-user/:id', authAdmin, async (req, res) => {
+    try {
+        const user = await User.findById(req.params.id);
+        if (!user) return res.status(404).send('Utilizador não encontrado.');
+        res.send(`
+            <!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><title>Editar Utilizador</title><script src="https://cdn.tailwindcss.com"></script></head>
+            <body class="bg-gray-100 p-4 md:p-8">
+                <div class="container mx-auto bg-white p-6 rounded-lg shadow-md max-w-lg">
+                    <h1 class="text-3xl font-bold text-gray-800 mb-6">Editar Utilizador</h1>
+                    <form action="/admin/edit-user/${user._id}" method="POST" class="space-y-4">
+                        <div>
+                            <label for="name" class="block font-semibold text-gray-700">Nome do Utilizador</label>
+                            <input type="text" id="name" name="name" value="${user.name}" class="w-full p-2 border rounded-md mt-1" required>
+                        </div>
+                        <div>
+                            <label for="pix" class="block font-semibold text-gray-700">Chave PIX</label>
+                            <input type="text" id="pix" name="pix" value="${user.pix}" class="w-full p-2 border rounded-md mt-1" required>
+                        </div>
+                        <div class="flex justify-end space-x-4 pt-4">
+                            <a href="/admin/users" class="bg-gray-300 text-gray-800 font-bold py-2 px-4 rounded-md hover:bg-gray-400">Cancelar</a>
+                            <button type="submit" class="bg-blue-600 text-white font-bold py-2 px-4 rounded-md hover:bg-blue-700">Salvar Alterações</button>
+                        </div>
+                    </form>
+                </div>
+            </body></html>
+        `);
+    } catch (error) {
+        res.status(500).send("Erro ao carregar dados do utilizador.");
+    }
+});
+
+app.post('/admin/edit-user/:id', authAdmin, async (req, res) => {
+    try {
+        const { name, pix } = req.body;
+        await User.findByIdAndUpdate(req.params.id, { name, pix });
+        res.redirect('/admin/users');
+    } catch (error) {
+        res.status(500).send("Erro ao salvar as alterações.");
+    }
 });
 
 app.get('/admin/games', authAdmin, async (req, res) => {
