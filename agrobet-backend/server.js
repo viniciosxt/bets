@@ -45,7 +45,6 @@ const BetSchema = new mongoose.Schema({
     date: Date,
     user: { name: String, pix: String },
     status: { type: String, enum: ['approved', 'pending', 'refunded'], default: 'pending' }, // Status do pagamento do utilizador
-    payoutStatus: { type: String, enum: ['pending', 'paid'], default: 'pending' }, // Status do pagamento do prémio
     odds: { type: Number, required: true },
     potentialPayout: { type: Number, required: true }
 });
