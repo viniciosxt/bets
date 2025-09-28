@@ -37,13 +37,15 @@ const GameSchema = new mongoose.Schema({
 const Game = mongoose.model('Game', GameSchema);
 
 const BetSchema = new mongoose.Schema({
+    paymentId: { type: String, unique: true, sparse: true }, // ID único do pagamento do Mercado Pago para evitar duplicados
     gameId: { type: mongoose.Schema.Types.ObjectId, ref: 'Game' },
     gameTitle: String,
     betChoice: String,
     betValue: Number,
     date: Date,
     user: { name: String, pix: String },
-    status: { type: String, default: 'pending' },
+    status: { type: String, enum: ['approved', 'pending', 'refunded'], default: 'pending' }, // Status do pagamento do utilizador
+    payoutStatus: { type: String, enum: ['pending', 'paid'], default: 'pending' }, // Status do pagamento do prémio
     odds: { type: Number, required: true },
     potentialPayout: { type: Number, required: true }
 });
@@ -78,15 +80,15 @@ const authAdmin = (req, res, next) => {
     }
 };
 
-// --- Função para Odds Dinâmicas (LÓGICA AJUSTADA) ---
+// --- Função para Odds Dinâmicas ---
 async function updateOdds(gameId) {
     try {
-        const VIG = 0.10; // Margem de 10% para a casa
+        const VIG = 0.10;
         const PAYOUT_RATE = 1 - VIG;
         const MIN_ODD = 1.01;
-        const MAX_ODD = 3.50; // Teto de segurança para as odds
-        const STARTING_POOL = 60; // Começa a ajustar as odds a partir de R$ 60
-        const MATURITY_POOL = 400; // Aos R$ 400, o peso do dinheiro é maior
+        const MAX_ODD = 3.50;
+        const STARTING_POOL = 60;
+        const MATURITY_POOL = 400;
 
         const game = await Game.findById(gameId);
         if (!game || game.status !== 'aberto' || !game.initialOdds) return;
@@ -105,7 +107,6 @@ async function updateOdds(gameId) {
 
         const totalPool = totalBetHome + totalBetAway + totalBetDraw;
         
-        // Apenas começa a ajustar após o valor inicial definido
         if (totalPool < STARTING_POOL) return; 
 
         const poolBasedOddHome = (totalPool * PAYOUT_RATE) / (totalBetHome || 1);
@@ -118,7 +119,6 @@ async function updateOdds(gameId) {
         const calculatedOddAway = (poolBasedOddAway * (1 - initialOddsWeight)) + (game.initialOdds.away * initialOddsWeight);
         const calculatedOddDraw = (poolBasedOddDraw * (1 - initialOddsWeight)) + (game.initialOdds.draw * initialOddsWeight);
         
-        // Aplica o teto de segurança (MAX_ODD) e o piso (MIN_ODD)
         const newOddHome = Math.min(MAX_ODD, Math.max(MIN_ODD, calculatedOddHome));
         const newOddAway = Math.min(MAX_ODD, Math.max(MIN_ODD, calculatedOddAway));
         const newOddDraw = Math.min(MAX_ODD, Math.max(MIN_ODD, calculatedOddDraw));
@@ -131,8 +131,6 @@ async function updateOdds(gameId) {
                 'odds.draw': newOddDraw,
             }
         });
-
-        console.log(`Odds atualizadas para o jogo ${game._id}: C:${newOddHome.toFixed(2)}, E:${newOddDraw.toFixed(2)}, V:${newOddAway.toFixed(2)}`);
 
     } catch (error) {
         console.error(`Erro ao atualizar odds para o jogo ${gameId}:`, error);
@@ -233,22 +231,45 @@ app.post('/webhook-mercadopago', async (req, res) => {
     try {
         if (req.body.type === 'payment') {
             const paymentDetails = await payment.get({ id: req.body.data.id });
+            const paymentId = paymentDetails.id.toString();
+
             if (paymentDetails.status === 'approved') {
+                const existingBet = await Bet.findOne({ paymentId: paymentId });
+                if (existingBet) {
+                    return res.sendStatus(200);
+                }
+
                 const metadata = paymentDetails.metadata;
                 const game = await Game.findById(metadata.game_id);
                 const newBet = new Bet({
+                    paymentId: paymentId,
                     gameId: metadata.game_id,
                     gameTitle: game ? `${game.home.name} vs ${game.away.name}` : 'Jogo Desconhecido',
-                    betChoice: metadata.bet_choice, betValue: Number(metadata.bet_value),
-                    date: new Date(), user: { name: metadata.user_name, pix: metadata.user_pix },
-                    status: 'approved', odds: metadata.odds, potentialPayout: metadata.potential_payout
+                    betChoice: metadata.bet_choice,
+                    betValue: Number(metadata.bet_value),
+                    date: new Date(),
+                    user: { name: metadata.user_name, pix: metadata.user_pix },
+                    status: 'approved',
+                    odds: metadata.odds,
+                    potentialPayout: metadata.potential_payout
                 });
                 await newBet.save();
                 updateOdds(metadata.game_id);
+
+            } else if (paymentDetails.status === 'refunded' || paymentDetails.status === 'cancelled') {
+                const betToUpdate = await Bet.findOne({ paymentId: paymentId });
+                if (betToUpdate && betToUpdate.status !== 'refunded') {
+                    betToUpdate.status = 'refunded';
+                    await betToUpdate.save();
+                    updateOdds(betToUpdate.gameId);
+                }
             }
         }
         res.sendStatus(200);
-    } catch (error) { res.sendStatus(500); }
+    } catch (error) {
+        console.error("Erro no webhook do Mercado Pago:", error);
+        res.sendStatus(500);
+    }
 });
 
 app.get('/my-bets/:pix', async (req, res) => {
@@ -266,16 +287,16 @@ app.get('/results', async (req, res) => {
 
 app.get('/relatorio', async (req, res) => {
     try {
-        const bets = await Bet.find({ status: 'approved' }).sort({ date: -1 });
+        const bets = await Bet.find().sort({ date: -1 });
         let html = `
             <!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><title>Relatório de Apostas</title><script src="https://cdn.tailwindcss.com"></script></head>
             <body class="bg-gray-100 p-8"><div class="container mx-auto bg-white p-6 rounded-lg shadow-md">
             <h1 class="text-3xl font-bold mb-6 text-gray-800">Relatório de Apostas Confirmadas</h1><div class="overflow-x-auto">
             <table class="min-w-full bg-white"><thead class="bg-gray-800 text-white">
-            <tr><th class="py-3 px-4 text-left">Data</th><th class="py-3 px-4 text-left">Utilizador</th><th class="py-3 px-4 text-left">Jogo</th><th class="py-3 px-4 text-left">Palpite</th><th class="py-3 px-4 text-left">Valor</th><th class="py-3 px-4 text-left">Odd</th><th class="py-3 px-4 text-left">Retorno Pot.</th></tr>
+            <tr><th class="py-3 px-4 text-left">Data</th><th class="py-3 px-4 text-left">Utilizador</th><th class="py-3 px-4 text-left">Jogo</th><th class="py-3 px-4 text-left">Palpite</th><th class="py-3 px-4 text-left">Valor</th><th class="py-3 px-4 text-left">Status</th><th class="py-3 px-4 text-left">Retorno Pot.</th></tr>
             </thead><tbody>`;
         bets.forEach(bet => {
-            html += `<tr class="border-b"><td class="py-3 px-4">${new Date(bet.date).toLocaleString('pt-BR')}</td><td class="py-3 px-4">${bet.user.name}</td><td class="py-3 px-4">${bet.gameTitle}</td><td class="py-3 px-4">${bet.betChoice}</td><td class="py-3 px-4">R$ ${bet.betValue.toFixed(2)}</td><td class="py-3 px-4">${bet.odds.toFixed(2)}</td><td class="py-3 px-4 font-semibold text-green-700">R$ ${bet.potentialPayout.toFixed(2)}</td></tr>`;
+            html += `<tr class="border-b"><td class="py-3 px-4">${new Date(bet.date).toLocaleString('pt-BR')}</td><td class="py-3 px-4">${bet.user.name}</td><td class="py-3 px-4">${bet.gameTitle}</td><td class="py-3 px-4">${bet.betChoice}</td><td class="py-3 px-4">R$ ${bet.betValue.toFixed(2)}</td><td class="py-3 px-4 font-semibold ${bet.status === 'refunded' ? 'text-red-500' : 'text-green-500'}">${bet.status}</td><td class="py-3 px-4 font-semibold text-gray-700">R$ ${bet.potentialPayout.toFixed(2)}</td></tr>`;
         });
         html += `</tbody></table></div></div></body></html>`;
         res.send(html);
@@ -322,12 +343,13 @@ app.get('/admin/dashboard', authAdmin, (req, res) => {
 
 app.get('/admin/financial-report', authAdmin, async (req, res) => {
     try {
-        const bets = await Bet.find({ status: 'approved' }).populate('gameId').lean();
+        const bets = await Bet.find({ status: { $in: ['approved', 'refunded'] } }).populate('gameId').lean();
         const finalizedGames = await Game.find({ status: 'finalizado' }).lean();
 
         const reportData = [];
         let totalLostValue = 0;
         let totalToPay = 0;
+        let totalPaid = 0;
 
         for (const game of finalizedGames) {
             const betsForGame = bets.filter(bet => bet.gameId && bet.gameId._id.equals(game._id));
@@ -337,35 +359,42 @@ app.get('/admin/financial-report', authAdmin, async (req, res) => {
                 const gameResult = game.result; 
                 const betChoice = bet.betChoice; 
 
-                if (gameResult === 'empate' && betChoice === 'Empate') {
-                    isWinner = true;
-                } else if (gameResult === 'home' && betChoice === game.home.name) {
-                    isWinner = true;
-                } else if (gameResult === 'away' && betChoice === game.away.name) {
-                    isWinner = true;
-                }
+                if (gameResult === 'empate' && betChoice === 'Empate') isWinner = true;
+                else if (gameResult === 'home' && betChoice === game.home.name) isWinner = true;
+                else if (gameResult === 'away' && betChoice === game.away.name) isWinner = true;
                 
                 let resultText = 'Pendente';
                  if (game.result === 'home') resultText = `Vencedor: ${game.home.name}`;
                  else if (game.result === 'away') resultText = `Vencedor: ${game.away.name}`;
                  else if (game.result === 'empate') resultText = 'Empate';
 
+                let betStatus = bet.status === 'refunded' ? 'Reembolsada' : (isWinner ? 'Ganhou' : 'Perdeu');
+                if (isWinner && bet.payoutStatus === 'paid') {
+                    betStatus = 'Paga';
+                }
+
                 reportData.push({
                     ...bet,
                     gameResult: resultText,
-                    betStatus: isWinner ? 'Ganhou' : 'Perdeu',
-                    amountToPay: isWinner ? bet.potentialPayout : 0,
+                    betStatus: betStatus,
+                    amountToPay: bet.status !== 'refunded' && isWinner ? bet.potentialPayout : 0,
                 });
 
-                if (isWinner) {
-                    totalToPay += bet.potentialPayout;
-                } else {
-                    totalLostValue += bet.betValue;
+                if (bet.status !== 'refunded') {
+                    if (isWinner) {
+                        if (bet.payoutStatus === 'paid') {
+                            totalPaid += bet.potentialPayout;
+                        } else {
+                            totalToPay += bet.potentialPayout;
+                        }
+                    } else {
+                        totalLostValue += bet.betValue;
+                    }
                 }
             }
         }
         
-        const balance = totalLostValue - totalToPay;
+        const balance = totalLostValue - (totalToPay + totalPaid);
 
         res.send(`
             <!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><title>Relatório Financeiro</title><script src="https://cdn.tailwindcss.com"></script></head>
@@ -379,9 +408,10 @@ app.get('/admin/financial-report', authAdmin, async (req, res) => {
                         </div>
                     </div>
 
-                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8 text-center">
-                        <div class="bg-red-100 p-4 rounded-lg"><p class="text-sm text-red-700">Total Arrecadado (Perdas)</p><p class="text-2xl font-bold text-red-800">R$ ${totalLostValue.toFixed(2)}</p></div>
-                        <div class="bg-blue-100 p-4 rounded-lg"><p class="text-sm text-blue-700">Total a Pagar (Ganhos)</p><p class="text-2xl font-bold text-blue-800">R$ ${totalToPay.toFixed(2)}</p></div>
+                    <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8 text-center">
+                        <div class="bg-red-100 p-4 rounded-lg"><p class="text-sm text-red-700">Arrecadado (Perdas)</p><p class="text-2xl font-bold text-red-800">R$ ${totalLostValue.toFixed(2)}</p></div>
+                        <div class="bg-blue-100 p-4 rounded-lg"><p class="text-sm text-blue-700">A Pagar (Ganhos)</p><p class="text-2xl font-bold text-blue-800">R$ ${totalToPay.toFixed(2)}</p></div>
+                        <div class="bg-gray-200 p-4 rounded-lg"><p class="text-sm text-gray-700">Total Já Pago</p><p class="text-2xl font-bold text-gray-800">R$ ${totalPaid.toFixed(2)}</p></div>
                         <div class="bg-green-100 p-4 rounded-lg"><p class="text-sm text-green-700">Balanço (Lucro)</p><p class="text-2xl font-bold text-green-800">R$ ${balance.toFixed(2)}</p></div>
                     </div>
                     
@@ -404,19 +434,19 @@ app.get('/admin/financial-report', authAdmin, async (req, res) => {
                                     <th class="py-3 px-4 text-left">Resultado do Jogo</th>
                                     <th class="py-3 px-4 text-left">Valor Aposta</th>
                                     <th class="py-3 px-4 text-left">Status</th>
-                                    <th class="py-3 px-4 text-left">Valor a Pagar</th>
+                                    <th class="py-3 px-4 text-left">Prémio</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 ${reportData.length > 0 ? reportData.map(bet => `
-                                    <tr class="border-b" data-game-title="${bet.gameTitle}">
+                                    <tr class="border-b ${bet.betStatus === 'Reembolsada' ? 'bg-red-50' : (bet.betStatus === 'Paga' ? 'bg-gray-100' : '')}" data-game-title="${bet.gameTitle}">
                                         <td class="py-3 px-4">${bet.user.name}</td>
                                         <td class="py-3 px-4">${bet.user.pix}</td>
                                         <td class="py-3 px-4">${bet.gameTitle}</td>
                                         <td class="py-3 px-4">${bet.betChoice}</td>
                                         <td class="py-3 px-4">${bet.gameResult}</td>
                                         <td class="py-3 px-4">R$ ${bet.betValue.toFixed(2)}</td>
-                                        <td class="py-3 px-4 font-semibold ${bet.betStatus === 'Ganhou' ? 'text-green-600' : 'text-red-600'}">${bet.betStatus}</td>
+                                        <td class="py-3 px-4 font-semibold ${bet.betStatus === 'Ganhou' ? 'text-green-600' : (bet.betStatus === 'Perdeu' ? 'text-red-600' : (bet.betStatus === 'Paga' ? 'text-gray-600' : 'text-yellow-600'))}">${bet.betStatus}</td>
                                         <td class="py-3 px-4 font-bold text-blue-700">R$ ${bet.amountToPay.toFixed(2)}</td>
                                     </tr>
                                 `).join('') : `
@@ -480,10 +510,9 @@ app.get('/admin/financial-report', authAdmin, async (req, res) => {
     }
 });
 
-// NOVA ROTA PARA O RESUMO DE PAGAMENTOS
 app.get('/admin/payment-summary', authAdmin, async (req, res) => {
     try {
-        const bets = await Bet.find({ status: 'approved' }).populate('gameId').lean();
+        const bets = await Bet.find({ status: 'approved', payoutStatus: 'pending' }).populate('gameId').lean();
         const finalizedGames = await Game.find({ status: 'finalizado' }).lean();
 
         const paymentsByUser = {};
@@ -515,8 +544,8 @@ app.get('/admin/payment-summary', authAdmin, async (req, res) => {
             <body class="bg-gray-100 p-4 md:p-8">
                 <div class="container mx-auto bg-white p-6 rounded-lg shadow-md max-w-4xl">
                     <div class="flex justify-between items-center mb-6">
-                        <h1 class="text-3xl font-bold text-gray-800">Resumo de Pagamentos</h1>
-                        <a href="/admin/financial-report" class="bg-blue-500 text-white font-bold py-2 px-4 rounded-md hover:bg-blue-600">Voltar ao Relatório Detalhado</a>
+                        <h1 class="text-3xl font-bold text-gray-800">Resumo de Pagamentos Pendentes</h1>
+                        <a href="/admin/financial-report" class="bg-blue-500 text-white font-bold py-2 px-4 rounded-md hover:bg-blue-600">Ver Relatório Detalhado</a>
                     </div>
                     <div class="overflow-x-auto">
                         <table class="min-w-full bg-white">
@@ -525,6 +554,7 @@ app.get('/admin/payment-summary', authAdmin, async (req, res) => {
                                     <th class="py-3 px-4 text-left">Utilizador</th>
                                     <th class="py-3 px-4 text-left">Chave PIX</th>
                                     <th class="py-3 px-4 text-left">Valor Total a Pagar</th>
+                                    <th class="py-3 px-4 text-center">Ação</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -533,9 +563,15 @@ app.get('/admin/payment-summary', authAdmin, async (req, res) => {
                                         <td class="py-3 px-4">${data.name}</td>
                                         <td class="py-3 px-4">${pix}</td>
                                         <td class="py-3 px-4 font-bold text-blue-700">R$ ${data.totalToPay.toFixed(2)}</td>
+                                        <td class="py-3 px-4 text-center">
+                                            <form action="/admin/mark-user-paid" method="POST" onsubmit="return confirm('Tem a certeza que já pagou a ${data.name}? Esta ação não pode ser desfeita.');">
+                                                <input type="hidden" name="userPix" value="${pix}">
+                                                <button type="submit" class="bg-green-500 text-white font-bold py-1 px-3 rounded-md hover:bg-green-600 text-sm">Marcar como Pago</button>
+                                            </form>
+                                        </td>
                                     </tr>
                                 `).join('') : `
-                                <tr><td colspan="3" class="text-center py-10 text-gray-500">Nenhum pagamento a ser feito no momento.</td></tr>
+                                <tr><td colspan="4" class="text-center py-10 text-gray-500">Nenhum pagamento pendente no momento.</td></tr>
                                 `}
                             </tbody>
                         </table>
@@ -547,6 +583,46 @@ app.get('/admin/payment-summary', authAdmin, async (req, res) => {
     } catch (error) {
         console.error("Erro ao gerar resumo de pagamentos:", error);
         res.status(500).send("Erro ao gerar o resumo de pagamentos.");
+    }
+});
+
+// NOVA ROTA PARA MARCAR UM UTILIZADOR COMO PAGO
+app.post('/admin/mark-user-paid', authAdmin, async (req, res) => {
+    try {
+        const { userPix } = req.body;
+        
+        // Encontra todas as apostas VENCEDORAS e PENDENTES de um utilizador
+        const betsToUpdate = await Bet.find({ 
+            'user.pix': userPix, 
+            status: 'approved', 
+            payoutStatus: 'pending' 
+        }).populate('gameId').lean();
+
+        const winningBetIds = [];
+        for (const bet of betsToUpdate) {
+            const game = bet.gameId;
+            if (!game || game.status !== 'finalizado') continue;
+
+            let isWinner = false;
+            if (game.result === 'empate' && bet.betChoice === 'Empate') isWinner = true;
+            else if (game.result === 'home' && bet.betChoice === game.home.name) isWinner = true;
+            else if (game.result === 'away' && bet.betChoice === game.away.name) isWinner = true;
+
+            if (isWinner) {
+                winningBetIds.push(bet._id);
+            }
+        }
+
+        if (winningBetIds.length > 0) {
+            await Bet.updateMany(
+                { _id: { $in: winningBetIds } },
+                { $set: { payoutStatus: 'paid' } }
+            );
+        }
+        res.redirect('/admin/payment-summary');
+    } catch (error) {
+        console.error("Erro ao marcar utilizador como pago:", error);
+        res.status(500).send("Erro ao marcar utilizador como pago.");
     }
 });
 
