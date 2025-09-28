@@ -310,11 +310,12 @@ app.post('/admin/login', (req, res) => {
 app.get('/admin/dashboard', authAdmin, (req, res) => {
     res.send(`
         <!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><title>Painel de Administração</title><script src="https://cdn.tailwindcss.com"></script></head>
-        <body class="bg-gray-200 min-h-screen flex items-center justify-center"><div class="container mx-auto p-8 bg-white rounded-lg shadow-lg max-w-4xl text-center">
-        <h1 class="text-4xl font-bold mb-8 text-gray-800">Painel de Administração</h1><div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <body class="bg-gray-200 min-h-screen flex items-center justify-center"><div class="container mx-auto p-8 bg-white rounded-lg shadow-lg max-w-5xl text-center">
+        <h1 class="text-4xl font-bold mb-8 text-gray-800">Painel de Administração</h1><div class="grid grid-cols-1 md:grid-cols-4 gap-6">
         <a href="/admin/games" class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-6 px-4 rounded-lg text-xl transition-transform transform hover:scale-105 flex flex-col justify-center">Gerir Jogos</a>
         <a href="/relatorio" target="_blank" class="bg-gray-500 hover:bg-gray-600 text-white font-bold py-6 px-4 rounded-lg text-xl transition-transform transform hover:scale-105 flex flex-col justify-center">Relatório Geral<span class="text-xs font-normal">(Todas as apostas)</span></a>
-        <a href="/admin/financial-report" target="_blank" class="bg-green-600 hover:bg-green-700 text-white font-bold py-6 px-4 rounded-lg text-xl transition-transform transform hover:scale-105 flex flex-col justify-center">Relatório Financeiro<span class="text-xs font-normal">(Pagamentos e Balanço)</span></a>
+        <a href="/admin/financial-report" target="_blank" class="bg-green-600 hover:bg-green-700 text-white font-bold py-6 px-4 rounded-lg text-xl transition-transform transform hover:scale-105 flex flex-col justify-center">Relatório Financeiro<span class="text-xs font-normal">(Balanço e Detalhes)</span></a>
+        <a href="/admin/payment-summary" target="_blank" class="bg-yellow-500 hover:bg-yellow-600 text-white font-bold py-6 px-4 rounded-lg text-xl transition-transform transform hover:scale-105 flex flex-col justify-center">Resumo de Pagamentos<span class="text-xs font-normal">(Valores por pessoa)</span></a>
         </div><form action="/admin/logout" method="post" class="mt-8"><button type="submit" class="bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-6 rounded-lg">Sair</button></form>
         </div></body></html>`);
 });
@@ -371,22 +372,27 @@ app.get('/admin/financial-report', authAdmin, async (req, res) => {
             <body class="bg-gray-100 p-4 md:p-8">
                 <div class="container mx-auto bg-white p-6 rounded-lg shadow-md">
                     <div class="flex flex-wrap justify-between items-center mb-6">
-                        <h1 class="text-3xl font-bold text-gray-800">Relatório Financeiro</h1>
+                        <h1 class="text-3xl font-bold text-gray-800">Relatório Financeiro Detalhado</h1>
                         <div>
-                            <select id="gameFilter" class="p-2 border rounded-md mr-2">
-                                <option value="all">Todos os Jogos</option>
-                                ${finalizedGames.map(g => `<option value="${g.home.name} vs ${g.away.name}">${g.home.name} vs ${g.away.name}</option>`).join('')}
-                            </select>
+                            <a href="/admin/payment-summary" class="bg-yellow-500 text-white font-bold py-2 px-4 rounded-md hover:bg-yellow-600 mr-2">Ver Resumo de Pagamentos</a>
                             <button id="export-csv" class="bg-green-600 text-white font-bold py-2 px-4 rounded-md hover:bg-green-700">Exportar para Excel (CSV)</button>
                         </div>
                     </div>
 
-                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6 text-center">
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8 text-center">
                         <div class="bg-red-100 p-4 rounded-lg"><p class="text-sm text-red-700">Total Arrecadado (Perdas)</p><p class="text-2xl font-bold text-red-800">R$ ${totalLostValue.toFixed(2)}</p></div>
                         <div class="bg-blue-100 p-4 rounded-lg"><p class="text-sm text-blue-700">Total a Pagar (Ganhos)</p><p class="text-2xl font-bold text-blue-800">R$ ${totalToPay.toFixed(2)}</p></div>
                         <div class="bg-green-100 p-4 rounded-lg"><p class="text-sm text-green-700">Balanço (Lucro)</p><p class="text-2xl font-bold text-green-800">R$ ${balance.toFixed(2)}</p></div>
                     </div>
                     
+                    <div class="flex items-center mb-4">
+                        <label for="gameFilter" class="mr-2 font-semibold">Filtrar por Jogo:</label>
+                        <select id="gameFilter" class="p-2 border rounded-md">
+                            <option value="all">Todos os Jogos</option>
+                            ${finalizedGames.map(g => `<option value="${g.home.name} vs ${g.away.name}">${g.home.name} vs ${g.away.name}</option>`).join('')}
+                        </select>
+                    </div>
+
                     <div class="overflow-x-auto">
                         <table id="report-table" class="min-w-full bg-white">
                             <thead class="bg-gray-800 text-white">
@@ -462,7 +468,7 @@ app.get('/admin/financial-report', authAdmin, async (req, res) => {
                                 csv.push(row.join(','));
                             }
                         }
-                        downloadCSV(csv.join('\\n'), 'relatorio_financeiro.csv');
+                        downloadCSV(csv.join('\\n'), 'relatorio_financeiro_detalhado.csv');
                     });
                 </script>
             </body></html>
@@ -473,6 +479,77 @@ app.get('/admin/financial-report', authAdmin, async (req, res) => {
         res.status(500).send("Erro ao gerar o relatório financeiro.");
     }
 });
+
+// NOVA ROTA PARA O RESUMO DE PAGAMENTOS
+app.get('/admin/payment-summary', authAdmin, async (req, res) => {
+    try {
+        const bets = await Bet.find({ status: 'approved' }).populate('gameId').lean();
+        const finalizedGames = await Game.find({ status: 'finalizado' }).lean();
+
+        const paymentsByUser = {};
+
+        for (const game of finalizedGames) {
+            const betsForGame = bets.filter(bet => bet.gameId && bet.gameId._id.equals(game._id));
+
+            for (const bet of betsForGame) {
+                let isWinner = false;
+                const gameResult = game.result; 
+                const betChoice = bet.betChoice; 
+
+                if (gameResult === 'empate' && betChoice === 'Empate') isWinner = true;
+                else if (gameResult === 'home' && betChoice === game.home.name) isWinner = true;
+                else if (gameResult === 'away' && betChoice === game.away.name) isWinner = true;
+
+                if (isWinner) {
+                    const userPix = bet.user.pix;
+                    if (!paymentsByUser[userPix]) {
+                        paymentsByUser[userPix] = { name: bet.user.name, totalToPay: 0 };
+                    }
+                    paymentsByUser[userPix].totalToPay += bet.potentialPayout;
+                }
+            }
+        }
+
+        res.send(`
+             <!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><title>Resumo de Pagamentos</title><script src="https://cdn.tailwindcss.com"></script></head>
+            <body class="bg-gray-100 p-4 md:p-8">
+                <div class="container mx-auto bg-white p-6 rounded-lg shadow-md max-w-4xl">
+                    <div class="flex justify-between items-center mb-6">
+                        <h1 class="text-3xl font-bold text-gray-800">Resumo de Pagamentos</h1>
+                        <a href="/admin/financial-report" class="bg-blue-500 text-white font-bold py-2 px-4 rounded-md hover:bg-blue-600">Voltar ao Relatório Detalhado</a>
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full bg-white">
+                            <thead class="bg-gray-800 text-white">
+                                <tr>
+                                    <th class="py-3 px-4 text-left">Utilizador</th>
+                                    <th class="py-3 px-4 text-left">Chave PIX</th>
+                                    <th class="py-3 px-4 text-left">Valor Total a Pagar</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${Object.keys(paymentsByUser).length > 0 ? Object.entries(paymentsByUser).map(([pix, data]) => `
+                                    <tr class="border-b">
+                                        <td class="py-3 px-4">${data.name}</td>
+                                        <td class="py-3 px-4">${pix}</td>
+                                        <td class="py-3 px-4 font-bold text-blue-700">R$ ${data.totalToPay.toFixed(2)}</td>
+                                    </tr>
+                                `).join('') : `
+                                <tr><td colspan="3" class="text-center py-10 text-gray-500">Nenhum pagamento a ser feito no momento.</td></tr>
+                                `}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </body></html>
+        `);
+
+    } catch (error) {
+        console.error("Erro ao gerar resumo de pagamentos:", error);
+        res.status(500).send("Erro ao gerar o resumo de pagamentos.");
+    }
+});
+
 
 app.post('/admin/logout', (req, res) => {
     res.clearCookie('admin_token');
