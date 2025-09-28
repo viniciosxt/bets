@@ -344,7 +344,7 @@ app.get('/admin/dashboard', authAdmin, (req, res) => {
     res.send(`
         <!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><title>Painel de Administração</title><script src="https://cdn.tailwindcss.com"></script></head>
         <body class="bg-gray-200 min-h-screen flex items-center justify-center"><div class="container mx-auto p-8 bg-white rounded-lg shadow-lg max-w-7xl text-center">
-        <h1 class="text-4xl font-bold mb-8 text-gray-800">Painel de Administração</h1><div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <h1 class="text-4xl font-bold mb-8 text-gray-800">Painel de Administração</h1><div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
         <a href="/admin/games" class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-6 px-4 rounded-lg text-xl transition-transform transform hover:scale-105 flex flex-col justify-center">Gerir Jogos</a>
         <a href="/admin/users" class="bg-indigo-500 hover:bg-indigo-600 text-white font-bold py-6 px-4 rounded-lg text-xl transition-transform transform hover:scale-105 flex flex-col justify-center">Gerir Utilizadores</a>
         <a href="/relatorio" target="_blank" class="bg-gray-500 hover:bg-gray-600 text-white font-bold py-6 px-4 rounded-lg text-xl transition-transform transform hover:scale-105 flex flex-col justify-center">Relatório Geral<span class="text-xs font-normal">(Todas as apostas)</span></a>
@@ -536,25 +536,25 @@ app.get('/admin/payment-summary', authAdmin, async (req, res) => {
 
         const paymentsByUser = {};
 
-        for (const game of finalizedGames) {
-            const betsForGame = bets.filter(bet => bet.gameId && bet.gameId._id.equals(game._id));
+        const finalizedGameIds = finalizedGames.map(g => g._id.toString());
+        const relevantBets = bets.filter(b => b.gameId && finalizedGameIds.includes(b.gameId._id.toString()));
 
-            for (const bet of betsForGame) {
-                let isWinner = false;
-                const gameResult = game.result; 
-                const betChoice = bet.betChoice; 
+        for (const bet of relevantBets) {
+            let isWinner = false;
+            const game = bet.gameId;
+            const gameResult = game.result; 
+            const betChoice = bet.betChoice; 
 
-                if (gameResult === 'empate' && betChoice === 'Empate') isWinner = true;
-                else if (gameResult === 'home' && betChoice === game.home.name) isWinner = true;
-                else if (gameResult === 'away' && betChoice === game.away.name) isWinner = true;
+            if (gameResult === 'empate' && betChoice === 'Empate') isWinner = true;
+            else if (gameResult === 'home' && betChoice === game.home.name) isWinner = true;
+            else if (gameResult === 'away' && betChoice === game.away.name) isWinner = true;
 
-                if (isWinner) {
-                    const userPix = bet.user.pix;
-                    if (!paymentsByUser[userPix]) {
-                        paymentsByUser[userPix] = { name: bet.user.name, totalToPay: 0 };
-                    }
-                    paymentsByUser[userPix].totalToPay += bet.potentialPayout;
+            if (isWinner) {
+                const userPix = bet.user.pix;
+                if (!paymentsByUser[userPix]) {
+                    paymentsByUser[userPix] = { name: bet.user.name, totalToPay: 0 };
                 }
+                paymentsByUser[userPix].totalToPay += bet.potentialPayout;
             }
         }
 
