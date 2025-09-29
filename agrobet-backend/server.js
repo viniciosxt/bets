@@ -81,12 +81,12 @@ const authAdmin = (req, res, next) => {
 // --- Função para Odds Dinâmicas (LÓGICA AJUSTADA) ---
 async function updateOdds(gameId) {
     try {
-        const VIG = 0.10; // Margem de 10% para a casa
+        const VIG = 0.20; // Margem de 20% para a casa
         const PAYOUT_RATE = 1 - VIG;
         const MIN_ODD = 1.01;
         const MAX_ODD = 4.50; // Teto de segurança para as odds
-        const STARTING_POOL = 35; // Começa a ajustar as odds a partir de R$ 35
-        const MATURITY_POOL = 400; // Aos R$ 400, o peso do dinheiro é maior
+        const STARTING_POOL = 40; // Começa a ajustar as odds a partir de R$ 40
+        const MATURITY_POOL = 120; // Aos R$ 120, o peso do dinheiro é maior
 
         const game = await Game.findById(gameId);
         if (!game || game.status !== 'aberto' || !game.initialOdds) return;
