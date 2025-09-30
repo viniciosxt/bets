@@ -88,7 +88,6 @@
 
         // --- ELEMENTOS DO DOM ---
         const gamesContainer = document.getElementById('games-container');
-        // Novo container
         const goalMarketsContainer = document.getElementById('goal-markets-container');
         const resultsContainer = document.getElementById('results-container');
         const loginModal = document.getElementById('login-modal');
@@ -110,7 +109,6 @@
                 const games = await response.json();
                 allGames = games;
 
-                // Limpa os containers
                 gamesContainer.innerHTML = '';
                 goalMarketsContainer.innerHTML = '';
                 
@@ -128,7 +126,6 @@
                         betLimitMessage = `Já apostou R$ ${totalAlreadyBet.toFixed(2)}. Pode apostar mais R$ ${remainingValue.toFixed(2)}.`;
                     }
                     
-                    // Renderiza o card do jogo principal (1x2)
                     gamesContainer.innerHTML += `
                     <div class="bet-card bg-white rounded-lg shadow-md border border-gray-200 overflow-hidden" data-game-id="${game._id}">
                         <div class="bg-green-800 text-white py-2 px-4 flex justify-between items-center"><h3 class="title-font text-xl">${game.competition}</h3><div class="text-sm bg-white text-green-800 font-bold px-3 py-1 rounded-full">${game.date}</div></div>
@@ -164,18 +161,11 @@
                         </div>
                     </div>`;
 
-                    // Renderiza os cards dos mercados de gols
                     if (game.goalMarkets && game.goalMarkets.length > 0) {
                         hasGoalMarkets = true;
                         game.goalMarkets.forEach(market => {
-                            let option1Text, option2Text;
-                            if (market.marketType === 'total_goals') {
-                                option1Text = `Mais ${market.specifier}`;
-                                option2Text = `Menos ${market.specifier}`;
-                            } else { // btts
-                                option1Text = 'Sim';
-                                option2Text = 'Não';
-                            }
+                            let option1Text = 'Mais 2.5';
+                            let option2Text = 'Menos 2.5';
 
                             goalMarketsContainer.innerHTML += `
                             <div class="bet-card bg-white rounded-lg shadow-md border border-gray-200 overflow-hidden" data-game-id="${game._id}" data-market-id="${market._id}">
@@ -224,7 +214,6 @@
         function addGameEventListeners() {
             document.querySelectorAll('.bet-card').forEach(card => {
                 const gameId = card.dataset.gameId;
-                // Pega o marketId também
                 const marketId = card.dataset.marketId || null;
                 
                 const game = allGames.find(g => g._id === gameId);
@@ -248,7 +237,6 @@
 
                     selectedOption = button.dataset.option;
 
-                    // Lógica para pegar a odd correta
                     if (marketId) {
                         const market = game.goalMarkets.find(m => m._id === marketId);
                         selectedOdd = market.odds[selectedOption] || 0;
@@ -277,7 +265,6 @@
                         return;
                     }
                     
-                    // Passa marketId para handleBet
                     handleBet(gameId, selectedOption, value, card, marketId);
                 });
             });
@@ -292,7 +279,6 @@
             }
             loadingModal.classList.remove('hidden');
 
-            // Adiciona marketId ao corpo da requisição
             const betData = { gameId, option, value, user: currentUser, marketId };
 
             try {
@@ -316,8 +302,6 @@
                 console.error("Erro ao criar pagamento:", error);
             }
         }
-        
-        // --- NENHUMA OUTRA ALTERAÇÃO NECESSÁRIA NO RESTANTE DO SCRIPT ---
         
         async function loadResults() {
              try {
@@ -467,3 +451,4 @@
     </script>
 </body>
 </html>
+
