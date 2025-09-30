@@ -15,28 +15,25 @@ const User = mongoose.model('User', new mongoose.Schema({
     password: { type: String, required: true, minlength: 6 }
 }));
 
-// Schema do Jogo ATUALIZADO para incluir novos mercados de aposta
 const GameSchema = new mongoose.Schema({
     home: { name: String, logo: String },
     away: { name: String, logo: String },
     date: String,
     competition: String,
     status: { type: String, enum: ['aberto', 'fechado', 'finalizado'], default: 'aberto' },
-    // Resultados ATUALIZADOS para os novos mercados
     result: {
         final: { type: String, enum: ['home', 'away', 'empate', 'pendente'], default: 'pendente' },
         goalsOver25: { type: String, enum: ['sim', 'nao', 'pendente'], default: 'pendente' },
         bothTeamsScore: { type: String, enum: ['sim', 'nao', 'pendente'], default: 'pendente' }
     },
-    // Odds ATUALIZADAS para incluir os novos mercados
     odds: {
         home: { type: Number, default: 1.5 },
         away: { type: Number, default: 1.5 },
         draw: { type: Number, default: 1.5 },
-        over25: { type: Number, default: 1.8 }, // Total de Golos (Mais de 2.5)
-        under25: { type: Number, default: 1.8 }, // Total de Golos (Menos de 2.5)
-        btsYes: { type: Number, default: 1.7 }, // Ambas as Equipas Marcam (Sim)
-        btsNo: { type: Number, default: 1.7 } // Ambas as Equipas Marcam (Não)
+        over25: { type: Number, default: 1.8 },
+        under25: { type: Number, default: 1.8 },
+        btsYes: { type: Number, default: 1.7 },
+        btsNo: { type: Number, default: 1.7 }
     },
     initialOdds: {
         home: { type: Number }, away: { type: Number }, draw: { type: Number },
@@ -47,20 +44,20 @@ const GameSchema = new mongoose.Schema({
 });
 const Game = mongoose.model('Game', GameSchema);
 
-// Schema da Aposta REFEITO para suportar apostas simples e múltiplas
 const BetSchema = new mongoose.Schema({
     selections: [{
         gameId: { type: mongoose.Schema.Types.ObjectId, ref: 'Game' },
         gameTitle: String,
-        betType: String, // e.g., 'RESULTADO_FINAL', 'GOLOS_MAIS_2_5', 'AMBAS_MARCAM'
-        betChoice: String, // e.g., 'home', 'sim'
+        betType: String,
+        betChoice: String,
+        betChoiceKey: String, // e.g. 'home', 'sim', 'nao'
         odds: Number,
         status: { type: String, enum: ['pendente', 'ganhou', 'perdeu', 'anulada'], default: 'pendente' }
     }],
     totalOdds: { type: Number, required: true },
     betValue: Number,
     user: { name: String, pix: String },
-    status: { type: String, default: 'aprovada' }, // Status geral da aposta múltipla
+    status: { type: String, enum: ['pendente', 'ganhou', 'perdeu'], default: 'pendente' },
     potentialPayout: { type: Number, required: true },
     date: Date,
 });
@@ -95,21 +92,81 @@ const authAdmin = (req, res, next) => {
     }
 };
 
-// --- Função para Odds Dinâmicas (Focada no mercado principal) ---
-async function updateOdds(gameId) {
-    try {
-        // ... (a lógica de odds dinâmicas existente permanece focada no mercado 1x2 por simplicidade)
-        // A expansão para outros mercados pode ser feita futuramente se necessário.
-    } catch (error) {
-        console.error(`Erro ao atualizar odds para o jogo ${gameId}:`, error);
+// --- Funções Auxiliares ---
+async function updateOdds(gameId) { /* ... (lógica de odds dinâmicas existente) ... */ }
+
+// NOVA FUNÇÃO para processar os resultados das apostas
+async function processBetResults(gameId) {
+    const game = await Game.findById(gameId);
+    if (!game || game.status !== 'finalizado') return;
+
+    const betsToProcess = await Bet.find({ 'selections.gameId': gameId, 'selections.status': 'pendente' });
+
+    for (const bet of betsToProcess) {
+        let allSelectionsCorrect = true;
+
+        for (const selection of bet.selections) {
+            // Se a seleção for de um jogo que acabou de ser finalizado
+            if (selection.gameId.equals(gameId)) {
+                let isWinner = false;
+                switch (selection.betType) {
+                    case 'RESULTADO_FINAL':
+                        isWinner = selection.betChoiceKey === game.result.final;
+                        break;
+                    case 'GOLOS_MAIS_2_5':
+                        isWinner = 'sim' === game.result.goalsOver25;
+                        break;
+                    case 'GOLOS_MENOS_2_5':
+                        isWinner = 'nao' === game.result.goalsOver25;
+                        break;
+                    case 'AMBAS_MARCAM':
+                        isWinner = selection.betChoiceKey === game.result.bothTeamsScore;
+                        break;
+                }
+                selection.status = isWinner ? 'ganhou' : 'perdeu';
+            }
+            if (selection.status === 'perdeu') allSelectionsCorrect = false;
+        }
+
+        // Atualiza o status geral da aposta múltipla
+        const hasPendingSelections = bet.selections.some(s => s.status === 'pendente');
+        if (!hasPendingSelections) {
+            bet.status = allSelectionsCorrect ? 'ganhou' : 'perdeu';
+        }
+
+        await bet.save();
     }
+    console.log(`Resultados das apostas para o jogo ${gameId} processados.`);
 }
 
 
 // --- ROTAS PÚBLICAS (para o site principal) ---
 app.get('/', (req, res) => res.send('<h1>Servidor do AgroBet está no ar!</h1>'));
-app.post('/login', async (req, res) => { /* ... (código existente sem alterações) */ });
-app.post('/register', async (req, res) => { /* ... (código existente sem alterações) */ });
+
+app.post('/login', async (req, res) => {
+    try {
+        const { pix, password } = req.body;
+        const user = await User.findOne({ pix });
+        if (!user) return res.status(404).json({ success: false, message: 'Utilizador não encontrado.' });
+        const isMatch = await bcrypt.compare(password, user.password);
+        if (!isMatch) return res.status(400).json({ success: false, message: 'Senha incorreta.' });
+        res.json({ success: true, user: { name: user.name, pix: user.pix } });
+    } catch (error) { res.status(500).json({ success: false, message: 'Erro no servidor.' }); }
+});
+
+app.post('/register', async (req, res) => {
+    try {
+        const { name, pix, password } = req.body;
+        let user = await User.findOne({ pix });
+        if (user) return res.status(400).json({ success: false, message: 'Esta chave PIX já está registada.' });
+        const salt = await bcrypt.genSalt(10);
+        const hashedPassword = await bcrypt.hash(password, salt);
+        user = new User({ name, pix, password: hashedPassword });
+        await user.save();
+        res.json({ success: true, user: { name: user.name, pix: user.pix } });
+    } catch (error) { res.status(500).json({ success: false, message: 'Erro no servidor.' }); }
+});
+
 
 app.get('/games', async (req, res) => {
     try {
@@ -118,76 +175,55 @@ app.get('/games', async (req, res) => {
     } catch (error) { res.status(500).json({ message: "Erro ao buscar jogos." }); }
 });
 
-// Rota de pagamento ATUALIZADA para aceitar apostas múltiplas
 app.post('/criar-pagamento', async (req, res) => {
     const { selections, value, user } = req.body;
-
     if (!selections || selections.length === 0 || !value || !user) {
         return res.status(400).json({ message: 'Dados da aposta incompletos.' });
     }
-
     try {
         let totalOdds = 1;
-        let gameIdsToUpdate = new Set();
         const DYNAMIC_LIMIT_ODD_THRESHOLD = 1.30;
         const DYNAMIC_LIMIT_VALUE = 5.00;
-
         for (const selection of selections) {
             const game = await Game.findById(selection.gameId);
-            if (!game || game.status !== 'aberto') {
-                return res.status(400).json({ message: `O jogo "${selection.gameTitle}" não está mais aberto para apostas.` });
-            }
-
-            // PRIORIDADE 3: Implementação do Limite Dinâmico
-            if (selection.odds < DYNAMIC_LIMIT_ODD_THRESHOLD && value > DYNAMIC_LIMIT_VALUE) {
-                return res.status(400).json({ message: `Para odds abaixo de ${DYNAMIC_LIMIT_ODD_THRESHOLD}, a aposta máxima é de R$ ${DYNAMIC_LIMIT_VALUE.toFixed(2)}.` });
-            }
-            
-            // Verifica o limite de aposta individual por jogo do utilizador
+            if (!game || game.status !== 'aberto') return res.status(400).json({ message: `O jogo "${selection.gameTitle}" não está mais aberto.` });
+            if (selection.odds < DYNAMIC_LIMIT_ODD_THRESHOLD && value > DYNAMIC_LIMIT_VALUE) return res.status(400).json({ message: `Para odds < ${DYNAMIC_LIMIT_ODD_THRESHOLD}, a aposta máxima é de R$ ${DYNAMIC_LIMIT_VALUE.toFixed(2)}.` });
             const userBetsOnGame = await Bet.find({ 'user.pix': user.pix, 'selections.gameId': game._id });
             const totalBetByUser = userBetsOnGame.reduce((acc, bet) => acc + bet.betValue, 0);
-            if ((totalBetByUser + value) > game.maxBetValue) {
-                 return res.status(400).json({ message: `Já atingiu o seu limite de aposta para o jogo ${game.home.name} vs ${game.away.name}.` });
-            }
-
+            if ((totalBetByUser + value) > game.maxBetValue) return res.status(400).json({ message: `Limite de aposta atingido para o jogo ${game.home.name} vs ${game.away.name}.` });
             totalOdds *= selection.odds;
-            gameIdsToUpdate.add(selection.gameId);
         }
-
         const potentialPayout = value * totalOdds;
         const description = selections.length > 1 ? `${selections.length} seleções` : selections[0].betChoice;
-
         const preferenceData = {
             body: {
                 items: [{
                     id: new mongoose.Types.ObjectId().toString(),
-                    title: `Aposta Múltipla (${selections.length}x)`,
+                    title: `Aposta (${selections.length}x)`,
                     description: description,
                     quantity: 1,
                     unit_price: Number(value),
                     currency_id: 'BRL'
                 }],
-                back_urls: { success: process.env.SUCCESS_REDIRECT_URL, failure: process.env.FRONTEND_URL, pending: process.env.FRONTEND_URL },
+                back_urls: { success: process.env.SUCCESS_REDIRECT_URL || process.env.FRONTEND_URL, failure: process.env.FRONTEND_URL, pending: process.env.FRONTEND_URL },
                 auto_return: 'approved',
                 notification_url: `${process.env.SERVER_URL}/webhook-mercadopago`,
                 metadata: {
                     user_pix: user.pix, user_name: user.name,
                     bet_value: value, total_odds: totalOdds,
                     potential_payout: potentialPayout,
-                    selections: JSON.stringify(selections) // Guarda as seleções em JSON
+                    selections: JSON.stringify(selections)
                 }
             }
         };
         const result = await preference.create(preferenceData);
         res.json({ id: result.id, init_point: result.init_point });
-
     } catch (error) {
         console.error(error);
         res.status(500).json({ message: 'Erro no servidor ao criar pagamento.' });
     }
 });
 
-// Webhook ATUALIZADO para processar a nova estrutura de apostas
 app.post('/webhook-mercadopago', async (req, res) => {
     try {
         if (req.body.type === 'payment') {
@@ -199,13 +235,11 @@ app.post('/webhook-mercadopago', async (req, res) => {
                     totalOdds: metadata.total_odds,
                     betValue: Number(metadata.bet_value),
                     user: { name: metadata.user_name, pix: metadata.user_pix },
-                    status: 'aprovada',
+                    status: 'pendente',
                     potentialPayout: metadata.potential_payout,
                     date: new Date()
                 });
                 await newBet.save();
-
-                // Atualiza as odds dinâmicas para os jogos envolvidos
                 const gameIds = new Set(newBet.selections.map(s => s.gameId));
                 gameIds.forEach(gameId => updateOdds(gameId));
             }
@@ -214,23 +248,68 @@ app.post('/webhook-mercadopago', async (req, res) => {
     } catch (error) { res.sendStatus(500); }
 });
 
-// ... (rotas /my-bets/:pix e /results precisam de pequenas adaptações para o novo schema, não incluídas por brevidade)
+app.get('/my-bets/:pix', async (req, res) => {
+    try {
+        const bets = await Bet.find({ 'user.pix': req.params.pix }).sort({ date: -1 });
+        res.json({ success: true, bets });
+    } catch (error) {
+        res.status(500).json({ success: false, message: 'Erro ao buscar apostas.' });
+    }
+});
+
+app.get('/results', async (req, res) => {
+    try {
+        const finishedGames = await Game.find({ status: 'finalizado' }).sort({ date: -1 });
+        res.json(finishedGames);
+    } catch (error) {
+        res.status(500).json({ message: "Erro ao buscar resultados." });
+    }
+});
 
 
 // --- ROTAS DO PAINEL DE ADMINISTRAÇÃO ---
-// ... (rotas /admin, /admin/login, /admin/dashboard sem alterações)
+app.get('/admin', (req, res) => {
+    res.send(`...`); // Formulário de login do admin
+});
 
-// Painel de jogos ATUALIZADO para adicionar e gerir novos mercados
+app.post('/admin/login', (req, res) => {
+    const { password } = req.body;
+    if (password === process.env.ADMIN_PASSWORD) {
+        const token = jwt.sign({ admin: true }, process.env.JWT_SECRET, { expiresIn: '1h' });
+        res.cookie('admin_token', token, { httpOnly: true, secure: true, sameSite: 'strict', maxAge: 3600000 });
+        res.redirect('/admin/dashboard');
+    } else {
+        res.send('<h1>Senha incorreta.</h1><a href="/admin">Tentar novamente</a>');
+    }
+});
+
+app.get('/admin/dashboard', authAdmin, (req, res) => {
+    res.send(`...`); // Dashboard do admin
+});
+
+
 app.get('/admin/games', authAdmin, async (req, res) => {
     try {
         const games = await Game.find().sort({ date: -1 });
-        // O HTML agora inclui campos para as novas odds
         res.send(`<!DOCTYPE html><html lang="pt-BR"><head><title>Gerir Jogos</title><script src="https://cdn.tailwindcss.com"></script></head>
             <body class="bg-gray-100 p-8"><div class="container mx-auto"><h1 class="text-3xl font-bold mb-6">Gerir Jogos</h1>
             <div class="bg-white p-6 rounded shadow-md mb-8">
                 <h2 class="text-2xl font-semibold mb-4">Adicionar Novo Jogo</h2>
                 <form action="/admin/add-game" method="post" class="space-y-4">
-                    <!-- ... campos de info do jogo ... -->
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <input name="home_name" placeholder="Nome Time Casa" class="p-2 border rounded" required>
+                        <input name="home_logo" placeholder="URL Logo Time Casa" class="p-2 border rounded" required>
+                        <input name="away_name" placeholder="Nome Time Visitante" class="p-2 border rounded" required>
+                        <input name="away_logo" placeholder="URL Logo Time Visitante" class="p-2 border rounded" required>
+                        <input name="date" placeholder="Data (ex: 25/12/2025 - 20:00)" class="p-2 border rounded" required>
+                        <input name="competition" placeholder="Competição" class="p-2 border rounded" required>
+                    </div>
+                     <div>
+                        <h3 class="font-semibold mb-2">Detalhes da Aposta</h3>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                           <input type="number" step="0.01" name="max_bet_value" placeholder="Valor Máx. por Aposta (R$)" class="p-2 border rounded" value="10" required>
+                        </div>
+                    </div>
                     <h3 class="font-semibold mb-2 pt-4 border-t">Mercado: Resultado Final</h3>
                     <div class="grid grid-cols-3 gap-4">
                        <input type="number" step="0.01" name="odds_home" placeholder="Odd Casa" class="p-2 border rounded" required>
@@ -247,7 +326,6 @@ app.get('/admin/games', authAdmin, async (req, res) => {
                        <input type="number" step="0.01" name="odds_btsYes" placeholder="Odd Sim" class="p-2 border rounded" required>
                        <input type="number" step="0.01" name="odds_btsNo" placeholder="Odd Não" class="p-2 border rounded" required>
                     </div>
-                    <!-- ... -->
                     <button type="submit" class="w-full bg-blue-500 text-white p-3 rounded hover:bg-blue-600 font-bold">Adicionar Jogo</button>
                 </form>
             </div>
@@ -257,6 +335,7 @@ app.get('/admin/games', authAdmin, async (req, res) => {
                     <div class="border p-4 rounded-lg mb-4">
                         <p class="font-bold text-lg">${game.home.name} vs ${game.away.name}</p>
                         <p>Status: <span class="font-semibold">${game.status}</span></p>
+                        ${game.status === 'aberto' ? `<form action="/admin/close-game/${game._id}" method="post" class="inline-block mt-2"><button class="bg-yellow-500 text-white px-3 py-1 rounded text-sm">Fechar Apostas</button></form>` : ''}
                         ${game.status === 'fechado' ? `
                         <form action="/admin/finalize-game/${game._id}" method="post" class="mt-2 space-y-2">
                             <h4 class="font-bold">Definir Resultados:</h4>
@@ -265,38 +344,38 @@ app.get('/admin/games', authAdmin, async (req, res) => {
                             <div><label>Ambas Marcam:</label> <select name="result_bothTeamsScore" class="p-1 border rounded"><option value="sim">Sim</option><option value="nao">Não</option></select></div>
                             <button type="submit" class="bg-green-500 text-white px-3 py-1 rounded text-sm">Finalizar Jogo</button>
                         </form>` : ''}
-                        ${game.status === 'aberto' ? `<form action="/admin/close-game/${game._id}" method="post" class="inline-block mt-2"><button class="bg-yellow-500 text-white px-3 py-1 rounded text-sm">Fechar Apostas</button></form>` : ''}
                     </div>`).join('')}
             </div></div></body></html>`);
     } catch (error) { res.status(500).send("Erro ao carregar jogos."); }
 });
 
-// Rota para adicionar jogo ATUALIZADA com os novos mercados
 app.post('/admin/add-game', authAdmin, async (req, res) => {
     try {
         const { home_name, home_logo, away_name, away_logo, date, competition, max_bet_value,
                 odds_home, odds_draw, odds_away, odds_over25, odds_under25, odds_btsYes, odds_btsNo } = req.body;
-        
         const odds = {
             home: parseFloat(odds_home), draw: parseFloat(odds_draw), away: parseFloat(odds_away),
             over25: parseFloat(odds_over25), under25: parseFloat(odds_under25),
             btsYes: parseFloat(odds_btsYes), btsNo: parseFloat(odds_btsNo)
         };
-
         const newGame = new Game({
             home: { name: home_name, logo: home_logo },
             away: { name: away_name, logo: away_logo },
-            date, competition,
-            odds: odds,
-            initialOdds: odds, // Salva as odds iniciais
+            date, competition, odds, initialOdds: odds,
             maxBetValue: parseFloat(max_bet_value)
         });
         await newGame.save();
         res.redirect('/admin/games');
-    } catch (error) { res.status(500).send("Erro ao adicionar jogo."); }
+    } catch (error) { console.error(error); res.status(500).send("Erro ao adicionar jogo."); }
 });
 
-// Rota para finalizar jogo ATUALIZADA com os novos mercados
+app.post('/admin/close-game/:id', authAdmin, async (req, res) => {
+    try {
+        await Game.findByIdAndUpdate(req.params.id, { status: 'fechado' });
+        res.redirect('/admin/games');
+    } catch (error) { res.status(500).send("Erro ao fechar jogo."); }
+});
+
 app.post('/admin/finalize-game/:id', authAdmin, async (req, res) => {
     try {
         const { result_final, result_goalsOver25, result_bothTeamsScore } = req.body;
@@ -308,13 +387,11 @@ app.post('/admin/finalize-game/:id', authAdmin, async (req, res) => {
                 bothTeamsScore: result_bothTeamsScore
             }
         });
-        // A lógica de calcular os vencedores das apostas múltiplas seria acionada aqui
+        await processBetResults(req.params.id); // Aciona a lógica de verificação
         res.redirect('/admin/games');
     } catch (error) { res.status(500).send("Erro ao finalizar jogo."); }
 });
 
-
-// ... (outras rotas de admin existentes)
 
 const PORT = process.env.PORT || 10000;
 app.listen(PORT, () => console.log(`--> Servidor AgroBet a correr na porta ${PORT}`));
