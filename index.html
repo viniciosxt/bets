@@ -43,7 +43,7 @@
         </section>
     </main>
     
-    <!-- Boletim de Apostas (Prioridade 2) -->
+    <!-- Boletim de Apostas -->
     <div id="bet-slip" class="fixed bottom-0 left-0 right-0 bg-white border-t-4 border-green-800 shadow-2xl p-4 z-50 hidden">
         <div class="container mx-auto">
             <div class="flex justify-between items-center mb-2">
@@ -101,7 +101,8 @@
     </div>
 
     <script>
-        const SERVER_URL = 'http://localhost:10000'; // Mude para o seu URL de produção quando necessário
+        // Lembre-se de mudar para o URL do seu servidor em produção
+        const SERVER_URL = 'http://localhost:10000'; 
         let currentUser = null;
         let allGames = [];
         let betSlip = []; 
@@ -135,6 +136,7 @@
         async function loadOpenGames() {
             try {
                 const response = await fetch(`${SERVER_URL}/games`);
+                if (!response.ok) throw new Error('Falha na resposta do servidor.');
                 const games = await response.json();
                 allGames = games;
                 gamesContainer.innerHTML = games.length === 0 ? '<p class="text-center text-gray-500 col-span-2">Nenhum jogo aberto para apostas.</p>' : '';
@@ -177,7 +179,33 @@
             }
         }
 
-        async function loadResults() { /* ... (código existente sem alterações) ... */ }
+        async function loadResults() {
+             try {
+                const response = await fetch(`${SERVER_URL}/results`);
+                const results = await response.json();
+                resultsContainer.innerHTML = results.length === 0 ? '<p class="text-center text-gray-500">Ainda não há resultados de jogos anteriores.</p>' : '';
+                results.forEach(game => {
+                    let winnerText = '';
+                    if (game.result.final === 'empate') {
+                        winnerText = `<span class="font-bold text-blue-600">EMPATE</span>`;
+                    } else if (game.result.final) {
+                        const winnerName = game.result.final === 'home' ? game.home.name : game.away.name;
+                        winnerText = `Vencedor: <span class="font-bold text-green-600">${winnerName.toUpperCase()}</span>`;
+                    }
+                    resultsContainer.innerHTML += `
+                        <div class="bg-white p-4 rounded-lg shadow-sm border flex items-center justify-between">
+                            <div>
+                                <p class="font-bold text-gray-800">${game.home.name} vs ${game.away.name}</p>
+                                <p class="text-sm text-gray-500">${game.competition} - ${game.date}</p>
+                            </div>
+                            <div class="text-right text-lg">${winnerText}</div>
+                        </div>`;
+                });
+            } catch (error) {
+                console.error("Erro ao carregar resultados:", error);
+                resultsContainer.innerHTML = '<p class="text-center text-red-500">Não foi possível carregar os resultados.</p>';
+            }
+        }
         
         // --- LÓGICA DO BOLETIM DE APOSTAS ---
         function addGameEventListeners() {
@@ -322,6 +350,8 @@
 
         function logout() {
             currentUser = null;
+            betSlip = [];
+            renderBetSlip();
             localStorage.removeItem('agrobetUser');
             location.reload();
         }
@@ -338,11 +368,11 @@
                  if (data.success) {
                     if(data.bets.length > 0) {
                         listElement.innerHTML = data.bets.map(bet => {
-                            const selectionsHtml = bet.selections.map(sel => `<p class="text-sm pl-2">- ${sel.gameTitle}: <strong>${sel.betChoice}</strong> (${sel.status})</p>`).join('');
+                            const selectionsHtml = bet.selections.map(sel => `<p class="text-sm pl-2">- ${sel.gameTitle}: <strong>${sel.betChoice}</strong> (<span class="font-semibold">${sel.status}</span>)</p>`).join('');
                             return `
                             <div class="border rounded-md p-3 bg-gray-50">
                                 <div class="flex justify-between items-center">
-                                    <p class="font-bold">Aposta Múltipla (${bet.selections.length}x) - <span class="text-green-700">R$ ${Number(bet.betValue).toFixed(2)}</span></p>
+                                    <p class="font-bold">Aposta (${bet.selections.length}x) - <span class="text-green-700">R$ ${Number(bet.betValue).toFixed(2)}</span></p>
                                     <span class="font-bold text-lg ${bet.status === 'ganhou' ? 'text-green-500' : (bet.status === 'perdeu' ? 'text-red-500' : 'text-yellow-500')}">${bet.status.toUpperCase()}</span>
                                 </div>
                                 ${selectionsHtml}
