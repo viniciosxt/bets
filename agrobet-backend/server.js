@@ -93,9 +93,8 @@ const authAdmin = (req, res, next) => {
 };
 
 // --- Funções Auxiliares ---
-async function updateOdds(gameId) { /* ... (lógica de odds dinâmicas existente) ... */ }
+async function updateOdds(gameId) { /* ... (lógica de odds dinâmicas pode ser expandida no futuro) ... */ }
 
-// NOVA FUNÇÃO para processar os resultados das apostas
 async function processBetResults(gameId) {
     const game = await Game.findById(gameId);
     if (!game || game.status !== 'finalizado') return;
@@ -103,37 +102,32 @@ async function processBetResults(gameId) {
     const betsToProcess = await Bet.find({ 'selections.gameId': gameId, 'selections.status': 'pendente' });
 
     for (const bet of betsToProcess) {
-        let allSelectionsCorrect = true;
+        let betIsLost = false;
 
         for (const selection of bet.selections) {
-            // Se a seleção for de um jogo que acabou de ser finalizado
-            if (selection.gameId.equals(gameId)) {
-                let isWinner = false;
-                switch (selection.betType) {
-                    case 'RESULTADO_FINAL':
-                        isWinner = selection.betChoiceKey === game.result.final;
-                        break;
-                    case 'GOLOS_MAIS_2_5':
-                        isWinner = 'sim' === game.result.goalsOver25;
-                        break;
-                    case 'GOLOS_MENOS_2_5':
-                        isWinner = 'nao' === game.result.goalsOver25;
-                        break;
-                    case 'AMBAS_MARCAM':
-                        isWinner = selection.betChoiceKey === game.result.bothTeamsScore;
-                        break;
-                }
-                selection.status = isWinner ? 'ganhou' : 'perdeu';
+            if (selection.status !== 'pendente') {
+                if (selection.status === 'perdeu') betIsLost = true;
+                continue;
             }
-            if (selection.status === 'perdeu') allSelectionsCorrect = false;
+
+            const selectionGame = await Game.findById(selection.gameId);
+            if (!selectionGame || selectionGame.status !== 'finalizado') continue;
+            
+            let isWinner = false;
+            switch (selection.betType) {
+                case 'RESULTADO_FINAL': isWinner = selection.betChoiceKey === selectionGame.result.final; break;
+                case 'GOLOS_MAIS_2_5': isWinner = 'sim' === selectionGame.result.goalsOver25; break;
+                case 'GOLOS_MENOS_2_5': isWinner = 'nao' === selectionGame.result.goalsOver25; break;
+                case 'AMBAS_MARCAM': isWinner = selection.betChoiceKey === selectionGame.result.bothTeamsScore; break;
+            }
+            selection.status = isWinner ? 'ganhou' : 'perdeu';
+            if (!isWinner) betIsLost = true;
         }
 
-        // Atualiza o status geral da aposta múltipla
         const hasPendingSelections = bet.selections.some(s => s.status === 'pendente');
         if (!hasPendingSelections) {
-            bet.status = allSelectionsCorrect ? 'ganhou' : 'perdeu';
+            bet.status = betIsLost ? 'perdeu' : 'ganhou';
         }
-
         await bet.save();
     }
     console.log(`Resultados das apostas para o jogo ${gameId} processados.`);
@@ -166,7 +160,6 @@ app.post('/register', async (req, res) => {
         res.json({ success: true, user: { name: user.name, pix: user.pix } });
     } catch (error) { res.status(500).json({ success: false, message: 'Erro no servidor.' }); }
 });
-
 
 app.get('/games', async (req, res) => {
     try {
@@ -276,7 +269,7 @@ app.post('/admin/login', (req, res) => {
     const { password } = req.body;
     if (password === process.env.ADMIN_PASSWORD) {
         const token = jwt.sign({ admin: true }, process.env.JWT_SECRET, { expiresIn: '1h' });
-        res.cookie('admin_token', token, { httpOnly: true, secure: true, sameSite: 'strict', maxAge: 3600000 });
+        res.cookie('admin_token', token, { httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'strict', maxAge: 3600000 });
         res.redirect('/admin/dashboard');
     } else {
         res.send('<h1>Senha incorreta.</h1><a href="/admin">Tentar novamente</a>');
@@ -284,7 +277,15 @@ app.post('/admin/login', (req, res) => {
 });
 
 app.get('/admin/dashboard', authAdmin, (req, res) => {
-    res.send(`...`); // Dashboard do admin
+    res.send(`
+        <!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><title>Painel de Administração</title><script src="https://cdn.tailwindcss.com"></script></head>
+        <body class="bg-gray-200 min-h-screen flex items-center justify-center"><div class="container mx-auto p-8 bg-white rounded-lg shadow-lg max-w-5xl text-center">
+        <h1 class="text-4xl font-bold mb-8 text-gray-800">Painel de Administração</h1><div class="grid grid-cols-1 md:grid-cols-4 gap-6">
+        <a href="/admin/games" class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-6 px-4 rounded-lg text-xl transition-transform transform hover:scale-105 flex flex-col justify-center">Gerir Jogos</a>
+        <a href="/admin/financial-report" target="_blank" class="bg-green-600 hover:bg-green-700 text-white font-bold py-6 px-4 rounded-lg text-xl transition-transform transform hover:scale-105 flex flex-col justify-center">Relatório Financeiro<span class="text-xs font-normal">(Balanço e Detalhes)</span></a>
+        <a href="/admin/payment-summary" target="_blank" class="bg-yellow-500 hover:bg-yellow-600 text-white font-bold py-6 px-4 rounded-lg text-xl transition-transform transform hover:scale-105 flex flex-col justify-center">Resumo de Pagamentos<span class="text-xs font-normal">(Valores por pessoa)</span></a>
+        </div><form action="/admin/logout" method="post" class="mt-8"><button type="submit" class="bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-6 rounded-lg">Sair</button></form>
+        </div></body></html>`);
 });
 
 
@@ -387,9 +388,33 @@ app.post('/admin/finalize-game/:id', authAdmin, async (req, res) => {
                 bothTeamsScore: result_bothTeamsScore
             }
         });
-        await processBetResults(req.params.id); // Aciona a lógica de verificação
+        await processBetResults(req.params.id);
         res.redirect('/admin/games');
     } catch (error) { res.status(500).send("Erro ao finalizar jogo."); }
+});
+
+// Relatórios (Adaptados para o novo schema)
+app.get('/admin/financial-report', authAdmin, async (req, res) => {
+    try {
+        const bets = await Bet.find({ status: { $in: ['ganhou', 'perdeu'] } }).populate('selections.gameId').lean();
+        let totalLostValue = 0;
+        let totalToPay = 0;
+
+        bets.forEach(bet => {
+            if (bet.status === 'ganhou') {
+                totalToPay += bet.potentialPayout;
+            } else if (bet.status === 'perdeu') {
+                totalLostValue += bet.betValue;
+            }
+        });
+
+        const balance = totalLostValue - totalToPay;
+        // O HTML do relatório precisa ser refeito para mostrar apostas múltiplas, mas os valores principais estão corretos.
+        res.send(`<h1>Relatório Financeiro</h1><p>Total Arrecadado (Perdas): R$ ${totalLostValue.toFixed(2)}</p><p>Total a Pagar (Ganhos): R$ ${totalToPay.toFixed(2)}</p><h2>Balanço: R$ ${balance.toFixed(2)}</h2>`);
+
+    } catch (error) {
+        res.status(500).send("Erro ao gerar relatório financeiro.");
+    }
 });
 
 
