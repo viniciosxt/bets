@@ -31,25 +31,17 @@
 
     <!-- Main Content -->
     <main class="container mx-auto px-4 py-8">
-        <!-- SEÇÃO DE MERCADO PRINCIPAL (1x2) -->
         <section id="open-games-section">
-            <h2 class="title-font text-3xl md:text-4xl text-green-800 mb-8 text-center">JOGOS DISPONÍVEIS (RESULTADO FINAL)</h2>
+            <h2 class="title-font text-3xl md:text-4xl text-green-800 mb-8 text-center">JOGOS DISPONÍVEIS</h2>
             <div class="grid grid-cols-1 md:grid-cols-2 gap-8" id="games-container"></div>
         </section>
-
-        <!-- Nova seção para mercados de gols -->
-        <section id="goal-markets-section" class="mt-16">
-            <h2 class="title-font text-3xl md:text-4xl text-green-800 mb-8 text-center">MERCADOS DE GOLS</h2>
-            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8" id="goal-markets-container"></div>
-        </section>
-
         <section id="results-section" class="mt-16">
             <h2 class="title-font text-3xl md:text-4xl text-gray-700 mb-8 text-center">RESULTADOS ANTERIORES</h2>
             <div class="space-y-4" id="results-container"></div>
         </section>
     </main>
 
-    <!-- Modals (sem alteração) -->
+    <!-- Modals -->
     <div id="login-modal" class="modal fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50">
         <div class="bg-white rounded-lg p-8 max-w-sm w-full mx-4">
             <h3 id="login-title" class="title-font text-2xl text-center mb-4 text-green-800">Login</h3>
@@ -88,7 +80,6 @@
 
         // --- ELEMENTOS DO DOM ---
         const gamesContainer = document.getElementById('games-container');
-        const goalMarketsContainer = document.getElementById('goal-markets-container');
         const resultsContainer = document.getElementById('results-container');
         const loginModal = document.getElementById('login-modal');
         const myBetsModal = document.getElementById('my-bets-modal');
@@ -108,20 +99,14 @@
                 const response = await fetch(`${SERVER_URL}/games`, { credentials: 'include' });
                 const games = await response.json();
                 allGames = games;
-
-                gamesContainer.innerHTML = '';
-                goalMarketsContainer.innerHTML = '';
+                gamesContainer.innerHTML = games.length === 0 ? '<p class="text-center text-gray-500 col-span-2">Nenhum jogo aberto para apostas.</p>' : '';
                 
-                let hasMainGames = false;
-                let hasGoalMarkets = false;
-
                 games.forEach(game => {
-                    hasMainGames = true;
                     const userBetsOnThisGame = currentUserBets.filter(bet => bet.gameId === game._id);
                     const totalAlreadyBet = userBetsOnThisGame.reduce((acc, bet) => acc + bet.betValue, 0);
                     const remainingValue = game.maxBetValue - totalAlreadyBet;
 
-                    let betLimitMessage = `Aposta máxima por jogo: R$ ${game.maxBetValue.toFixed(2)}`;
+                    let betLimitMessage = `Aposta máxima: R$ ${game.maxBetValue.toFixed(2)}`;
                     if (totalAlreadyBet > 0) {
                         betLimitMessage = `Já apostou R$ ${totalAlreadyBet.toFixed(2)}. Pode apostar mais R$ ${remainingValue.toFixed(2)}.`;
                     }
@@ -130,7 +115,7 @@
                     <div class="bet-card bg-white rounded-lg shadow-md border border-gray-200 overflow-hidden" data-game-id="${game._id}">
                         <div class="bg-green-800 text-white py-2 px-4 flex justify-between items-center"><h3 class="title-font text-xl">${game.competition}</h3><div class="text-sm bg-white text-green-800 font-bold px-3 py-1 rounded-full">${game.date}</div></div>
                         <div class="p-6">
-                            <div class="flex justify-around items-center mb-6"><div class="text-center w-1/3"><img src="${game.home.logo}" class="h-16 mx-auto mb-2" onerror="this.onerror=null;this.src='https.placehold.co/64x64/e2e8f0/e2e8f0?text=...';"><span class="font-bold">${game.home.name}</span></div><div class="text-2xl font-bold text-gray-400">VS</div><div class="text-center w-1/3"><img src="${game.away.logo}" class="h-16 mx-auto mb-2" onerror="this.onerror=null;this.src='https.placehold.co/64x64/e2e8f0/e2e8f0?text=...';"><span class="font-bold">${game.away.name}</span></div></div>
+                            <div class="flex justify-around items-center mb-6"><div class="text-center w-1/3"><img src="${game.home.logo}" class="h-16 mx-auto mb-2" onerror="this.onerror=null;this.src='https://placehold.co/64x64/e2e8f0/e2e8f0?text=...';"><span class="font-bold">${game.home.name}</span></div><div class="text-2xl font-bold text-gray-400">VS</div><div class="text-center w-1/3"><img src="${game.away.logo}" class="h-16 mx-auto mb-2" onerror="this.onerror=null;this.src='https://placehold.co/64x64/e2e8f0/e2e8f0?text=...';"><span class="font-bold">${game.away.name}</span></div></div>
                             <div class="mb-4">
                                 <h4 class="font-bold mb-2 text-center text-gray-700">PALPITE:</h4>
                                 <div class="grid grid-cols-3 gap-2 bet-options">
@@ -160,149 +145,14 @@
                             </button>
                         </div>
                     </div>`;
-
-                    if (game.goalMarkets && game.goalMarkets.length > 0) {
-                        hasGoalMarkets = true;
-                        game.goalMarkets.forEach(market => {
-                            let option1Text = 'Mais 2.5';
-                            let option2Text = 'Menos 2.5';
-
-                            goalMarketsContainer.innerHTML += `
-                            <div class="bet-card bg-white rounded-lg shadow-md border border-gray-200 overflow-hidden" data-game-id="${game._id}" data-market-id="${market._id}">
-                                <div class="bg-gray-700 text-white py-2 px-4">
-                                    <h3 class="font-bold text-lg">${game.home.name} vs ${game.away.name}</h3>
-                                    <p class="text-sm opacity-90">${market.label}</p>
-                                </div>
-                                <div class="p-6">
-                                    <div class="mb-4">
-                                        <h4 class="font-bold mb-2 text-center text-gray-700">PALPITE:</h4>
-                                        <div class="grid grid-cols-2 gap-2 bet-options">
-                                            <button class="bet-option py-2 border rounded flex flex-col items-center" data-option="option1" ${remainingValue <= 0 ? 'disabled' : ''}><span>${option1Text}</span><span class="font-bold text-green-600">${market.odds.option1.toFixed(2)}</span></button>
-                                            <button class="bet-option py-2 border rounded flex flex-col items-center" data-option="option2" ${remainingValue <= 0 ? 'disabled' : ''}><span>${option2Text}</span><span class="font-bold text-green-600">${market.odds.option2.toFixed(2)}</span></button>
-                                        </div>
-                                    </div>
-                                    <div class="mb-4">
-                                         <h4 class="font-bold mb-2 text-center text-gray-700">VALOR DA APOSTA (R$):</h4>
-                                        ${remainingValue > 0 ? `
-                                            <input type="number" class="bet-value-input w-full p-2 border rounded text-center" min="1" max="${remainingValue.toFixed(2)}" step="any" placeholder="Ex: 10.00">
-                                            <p class="text-xs text-center text-gray-500 mt-1">${betLimitMessage}</p>
-                                        ` : `
-                                            <div class="text-center p-2 bg-gray-100 rounded-md"><p class="font-bold text-red-600">Limite de aposta atingido!</p></div>
-                                        `}
-                                    </div>
-                                    <div class="text-center font-bold mb-4 text-lg">Retorno Potencial: <span class="potential-payout text-green-700">R$ 0.00</span></div>
-                                    <div class="bet-error text-red-500 text-sm text-center h-4 mb-2"></div>
-                                    <button class="confirm-btn w-full py-3 rounded-md text-white font-bold text-lg" ${remainingValue <= 0 ? 'disabled' : ''}>
-                                        ${remainingValue > 0 ? 'APOSTAR' : 'LIMITE ATINGIDO'}
-                                    </button>
-                                </div>
-                            </div>`;
-                        });
-                    }
                 });
-
-                if (!hasMainGames) gamesContainer.innerHTML = '<p class="text-center text-gray-500 col-span-2">Nenhum jogo aberto para apostas.</p>';
-                if (!hasGoalMarkets) goalMarketsContainer.innerHTML = '<p class="text-center text-gray-500 col-span-full">Nenhum mercado de gols disponível no momento.</p>';
-
                 addGameEventListeners();
             } catch (error) { 
                 console.error("Erro ao carregar jogos:", error);
                 gamesContainer.innerHTML = '<p class="text-center text-red-500 col-span-2">Não foi possível carregar os jogos. O servidor pode estar a iniciar. Tente recarregar a página em alguns segundos.</p>';
             }
         }
-        
-        function addGameEventListeners() {
-            document.querySelectorAll('.bet-card').forEach(card => {
-                const gameId = card.dataset.gameId;
-                const marketId = card.dataset.marketId || null;
-                
-                const game = allGames.find(g => g._id === gameId);
-                let selectedOption = null;
-                let selectedOdd = 0;
 
-                const betOptions = card.querySelector('.bet-options');
-                const valueInput = card.querySelector('.bet-value-input');
-                const payoutEl = card.querySelector('.potential-payout');
-                const confirmBtn = card.querySelector('.confirm-btn');
-                const errorEl = card.querySelector('.bet-error');
-
-                if (!confirmBtn || confirmBtn.disabled) return;
-
-                betOptions.addEventListener('click', e => {
-                    const button = e.target.closest('button.bet-option');
-                    if (!button || button.disabled) return;
-                    
-                    betOptions.querySelectorAll('.bet-option').forEach(btn => btn.classList.remove('selected'));
-                    button.classList.add('selected');
-
-                    selectedOption = button.dataset.option;
-
-                    if (marketId) {
-                        const market = game.goalMarkets.find(m => m._id === marketId);
-                        selectedOdd = market.odds[selectedOption] || 0;
-                    } else {
-                        const oddsKey = selectedOption === 'empate' ? 'draw' : selectedOption;
-                        selectedOdd = game.odds[oddsKey] || 0;
-                    }
-                    updatePayout();
-                });
-
-                if (valueInput) valueInput.addEventListener('input', updatePayout);
-
-                function updatePayout() {
-                    const value = valueInput ? parseFloat(valueInput.value) || 0 : 0;
-                    const payout = value * selectedOdd;
-                    payoutEl.textContent = `R$ ${payout.toFixed(2)}`;
-                    confirmBtn.disabled = !(selectedOption && value > 0);
-                }
-
-                confirmBtn.addEventListener('click', () => {
-                    errorEl.textContent = '';
-                    const value = parseFloat(valueInput.value);
-
-                    if (value > parseFloat(valueInput.max)) {
-                        errorEl.textContent = `O valor máximo restante é R$ ${parseFloat(valueInput.max).toFixed(2)}.`;
-                        return;
-                    }
-                    
-                    handleBet(gameId, selectedOption, value, card, marketId);
-                });
-            });
-        }
-
-        async function handleBet(gameId, option, value, card, marketId = null) {
-            const errorEl = card.querySelector('.bet-error');
-            if (!currentUser) {
-                showError("Por favor, faça login para poder apostar.");
-                loginModal.style.display = 'flex';
-                return;
-            }
-            loadingModal.classList.remove('hidden');
-
-            const betData = { gameId, option, value, user: currentUser, marketId };
-
-            try {
-                const response = await fetch(`${SERVER_URL}/criar-pagamento`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(betData),
-                    credentials: 'include'
-                });
-                if (!response.ok) {
-                    const err = await response.json();
-                    throw new Error(err.message || 'A resposta do servidor não foi OK.');
-                }
-                const data = await response.json();
-                window.location.href = data.init_point;
-            } catch (error) {
-                loadingModal.classList.add('hidden');
-                if (errorEl) {
-                    errorEl.textContent = error.message;
-                }
-                console.error("Erro ao criar pagamento:", error);
-            }
-        }
-        
         async function loadResults() {
              try {
                 const response = await fetch(`${SERVER_URL}/results`, { credentials: 'include' });
@@ -331,6 +181,89 @@
             }
         }
 
+        function addGameEventListeners() {
+            document.querySelectorAll('.bet-card').forEach(card => {
+                const gameId = card.dataset.gameId;
+                const game = allGames.find(g => g._id === gameId);
+                let selectedOption = null;
+                let selectedOdd = 0;
+
+                const betOptions = card.querySelector('.bet-options');
+                const valueInput = card.querySelector('.bet-value-input');
+                const payoutEl = card.querySelector('.potential-payout');
+                const confirmBtn = card.querySelector('.confirm-btn');
+                const errorEl = card.querySelector('.bet-error');
+
+                if (confirmBtn.disabled) return; // Se o botão já estiver desativado, não adicione listeners
+
+                betOptions.addEventListener('click', e => {
+                    const button = e.target.closest('button.bet-option');
+                    if (!button || button.disabled) return;
+                    
+                    betOptions.querySelectorAll('.bet-option').forEach(btn => btn.classList.remove('selected'));
+                    button.classList.add('selected');
+
+                    selectedOption = button.dataset.option;
+                    const oddsKey = selectedOption === 'empate' ? 'draw' : selectedOption;
+                    selectedOdd = game.odds[oddsKey] || 0;
+                    updatePayout();
+                });
+
+                valueInput.addEventListener('input', updatePayout);
+
+                function updatePayout() {
+                    const value = parseFloat(valueInput.value) || 0;
+                    const payout = value * selectedOdd;
+                    payoutEl.textContent = `R$ ${payout.toFixed(2)}`;
+                    confirmBtn.disabled = !(selectedOption && value > 0);
+                }
+
+                confirmBtn.addEventListener('click', () => {
+                    errorEl.textContent = ''; // Limpa erro anterior
+                    const value = parseFloat(valueInput.value);
+
+                    // Validação do lado do cliente
+                    if (value > parseFloat(valueInput.max)) {
+                        errorEl.textContent = `O valor máximo restante é R$ ${parseFloat(valueInput.max).toFixed(2)}.`;
+                        return;
+                    }
+                    
+                    handleBet(gameId, selectedOption, value, card);
+                });
+            });
+        }
+
+        async function handleBet(gameId, option, value, card) {
+            const errorEl = card.querySelector('.bet-error');
+            if (!currentUser) {
+                showError("Por favor, faça login para poder apostar.");
+                loginModal.style.display = 'flex';
+                return;
+            }
+            loadingModal.classList.remove('hidden');
+            const betData = { gameId, option, value, user: currentUser };
+            try {
+                const response = await fetch(`${SERVER_URL}/criar-pagamento`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(betData),
+                    credentials: 'include'
+                });
+                if (!response.ok) {
+                    const err = await response.json();
+                    throw new Error(err.message || 'A resposta do servidor não foi OK.');
+                }
+                const data = await response.json();
+                window.location.href = data.init_point;
+            } catch (error) {
+                loadingModal.classList.add('hidden');
+                if (errorEl) {
+                    errorEl.textContent = error.message;
+                }
+                console.error("Erro ao criar pagamento:", error);
+            }
+        }
+        
         async function handleAuthAction() {
             const pix = pixInput.value.trim();
             const password = passwordInput.value.trim();
@@ -392,7 +325,6 @@
             logoutBtn.classList.add('hidden');
             loginModal.style.display = 'flex';
             gamesContainer.innerHTML = '';
-            goalMarketsContainer.innerHTML = '';
             resultsContainer.innerHTML = '';
             loadOpenGames();
             loadResults();
@@ -417,6 +349,7 @@
             listElement.innerHTML = '<p class="text-gray-500">A carregar apostas...</p>';
             myBetsModal.classList.remove('hidden');
 
+            // Re-utiliza os dados já carregados
             if (currentUserBets.length > 0) {
                  listElement.innerHTML = currentUserBets.map(bet => `
                     <div class="border rounded-md p-3 bg-gray-50">
