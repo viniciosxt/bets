@@ -15,22 +15,6 @@ const User = mongoose.model('User', new mongoose.Schema({
     password: { type: String, required: true, minlength: 6 }
 }));
 
-// Schema para mercados de aposta individuais dentro de um jogo
-const MarketSchema = new mongoose.Schema({
-    marketType: { type: String, required: true, enum: ['total_goals', 'team_total_goals'] }, // 'team_to_score' foi trocado por 'team_total_goals'
-    specifier: { type: String, required: true }, // Ex: '2.5' para total_goals, 'home' ou 'away' para team_total_goals
-    label: { type: String, required: true }, // Ex: "Total de Gols (Mais/Menos 2.5)" ou "Time da Casa - Total de Gols (Mais/Menos 2.5)"
-    status: { type: String, enum: ['aberto', 'fechado'], default: 'aberto' },
-    odds: {
-        option1: { type: Number, required: true }, // Ex: Odd para "Mais de 2.5"
-        option2: { type: Number, required: true }  // Ex: Odd para "Menos de 2.5"
-    },
-    initialOdds: {
-        option1: { type: Number },
-        option2: { type: Number }
-    }
-});
-
 const GameSchema = new mongoose.Schema({
     home: { name: String, logo: String },
     away: { name: String, logo: String },
@@ -43,19 +27,17 @@ const GameSchema = new mongoose.Schema({
         away: { type: Number, default: 1.5 },
         draw: { type: Number, default: 1.5 }
     },
-    initialOdds: {
+    initialOdds: { // Guarda as odds originais para um cálculo mais estável
         home: { type: Number },
         away: { type: Number },
         draw: { type: Number }
     },
-    maxBetValue: { type: Number, default: 35 },
-    goalMarkets: [MarketSchema]
+    maxBetValue: { type: Number, default: 35 } // Limite de valor por aposta
 });
 const Game = mongoose.model('Game', GameSchema);
 
 const BetSchema = new mongoose.Schema({
     gameId: { type: mongoose.Schema.Types.ObjectId, ref: 'Game' },
-    marketId: { type: mongoose.Schema.Types.ObjectId, required: false },
     gameTitle: String,
     betChoice: String,
     betValue: Number,
@@ -72,7 +54,7 @@ mongoose.connect(process.env.MONGODB_URI).then(() => console.log("MongoDB conect
 const app = express();
 
 const corsOptions = {
-    origin: process.env.FRONTEND_URL || '*',
+    origin: process.env.FRONTEND_URL || '*', // Permite qualquer origem como fallback
     credentials: true
 };
 app.use(cors(corsOptions));
@@ -96,20 +78,20 @@ const authAdmin = (req, res, next) => {
     }
 };
 
-// --- Função para Odds Dinâmicas ---
+// --- Função para Odds Dinâmicas (LÓGICA AJUSTADA) ---
 async function updateOdds(gameId) {
     try {
-        const VIG = 0.20;
+        const VIG = 0.20; // Margem de 20% para a casa
         const PAYOUT_RATE = 1 - VIG;
         const MIN_ODD = 1.01;
-        const MAX_ODD = 4.50;
-        const STARTING_POOL = 40;
-        const MATURITY_POOL = 120;
+        const MAX_ODD = 4.50; // Teto de segurança para as odds
+        const STARTING_POOL = 40; // Começa a ajustar as odds a partir de R$ 40
+        const MATURITY_POOL = 120; // Aos R$ 120, o peso do dinheiro é maior
 
         const game = await Game.findById(gameId);
         if (!game || game.status !== 'aberto' || !game.initialOdds) return;
 
-        const bets = await Bet.find({ gameId: gameId, status: 'approved', marketId: null });
+        const bets = await Bet.find({ gameId: gameId, status: 'approved' });
 
         let totalBetHome = 0;
         let totalBetAway = 0;
@@ -123,6 +105,7 @@ async function updateOdds(gameId) {
 
         const totalPool = totalBetHome + totalBetAway + totalBetDraw;
         
+        // Apenas começa a ajustar após o valor inicial definido
         if (totalPool < STARTING_POOL) return; 
 
         const poolBasedOddHome = (totalPool * PAYOUT_RATE) / (totalBetHome || 1);
@@ -135,6 +118,7 @@ async function updateOdds(gameId) {
         const calculatedOddAway = (poolBasedOddAway * (1 - initialOddsWeight)) + (game.initialOdds.away * initialOddsWeight);
         const calculatedOddDraw = (poolBasedOddDraw * (1 - initialOddsWeight)) + (game.initialOdds.draw * initialOddsWeight);
         
+        // Aplica o teto de segurança (MAX_ODD) e o piso (MIN_ODD)
         const newOddHome = Math.min(MAX_ODD, Math.max(MIN_ODD, calculatedOddHome));
         const newOddAway = Math.min(MAX_ODD, Math.max(MIN_ODD, calculatedOddAway));
         const newOddDraw = Math.min(MAX_ODD, Math.max(MIN_ODD, calculatedOddDraw));
@@ -148,10 +132,10 @@ async function updateOdds(gameId) {
             }
         });
 
-        console.log(`Odds (1x2) atualizadas para o jogo ${game._id}: C:${newOddHome.toFixed(2)}, E:${newOddDraw.toFixed(2)}, V:${newOddAway.toFixed(2)}`);
+        console.log(`Odds atualizadas para o jogo ${game._id}: C:${newOddHome.toFixed(2)}, E:${newOddDraw.toFixed(2)}, V:${newOddAway.toFixed(2)}`);
 
     } catch (error) {
-        console.error(`Erro ao atualizar odds (1x2) para o jogo ${gameId}:`, error);
+        console.error(`Erro ao atualizar odds para o jogo ${gameId}:`, error);
     }
 }
 
@@ -190,9 +174,8 @@ app.get('/games', async (req, res) => {
     } catch (error) { res.status(500).json({ message: "Erro ao buscar jogos." }); }
 });
 
-
 app.post('/criar-pagamento', async (req, res) => {
-    const { gameId, option, value, user, marketId } = req.body;
+    const { gameId, option, value, user } = req.body;
     try {
         const game = await Game.findById(gameId);
         if (!game || game.status !== 'aberto') {
@@ -210,31 +193,14 @@ app.post('/criar-pagamento', async (req, res) => {
             return res.status(400).json({ message: `O seu limite total para este jogo é R$ ${game.maxBetValue.toFixed(2)}. Ainda pode apostar até R$ ${remainingValue.toFixed(2)}.` });
         }
 
-        let odds, potentialPayout, betChoiceText;
+
+        const oddsKey = option === 'empate' ? 'draw' : option;
+        const odds = game.odds[oddsKey];
+        const potentialPayout = value * odds;
+        const betChoiceText = option === 'empate' ? 'Empate' : game[option].name;
+        
         const redirectUrl = process.env.SUCCESS_REDIRECT_URL || process.env.FRONTEND_URL;
 
-        if (marketId) {
-            const market = game.goalMarkets.id(marketId);
-            if (!market || market.status !== 'aberto') {
-                return res.status(400).json({ message: 'Este mercado não está mais aberto para apostas.' });
-            }
-            
-            odds = option === 'option1' ? market.odds.option1 : market.odds.option2;
-
-            if (market.marketType === 'total_goals') {
-                betChoiceText = `${option === 'option1' ? `Mais de` : `Menos de`} ${market.specifier} Gols`;
-            } else { // team_total_goals
-                betChoiceText = `${market.label} (${option === 'option1' ? 'Mais 2.5' : 'Menos 2.5'})`;
-            }
-            potentialPayout = value * odds;
-            
-        } else {
-            const oddsKey = option === 'empate' ? 'draw' : option;
-            odds = game.odds[oddsKey];
-            betChoiceText = option === 'empate' ? 'Empate' : game[option].name;
-            potentialPayout = value * odds;
-        }
-        
         const preferenceData = {
             body: {
                 items: [{
@@ -249,14 +215,9 @@ app.post('/criar-pagamento', async (req, res) => {
                 auto_return: 'approved', 
                 notification_url: `${process.env.SERVER_URL}/webhook-mercadopago`,
                 metadata: {
-                    game_id: gameId, 
-                    user_pix: user.pix, 
-                    user_name: user.name,
-                    bet_choice: betChoiceText, 
-                    bet_value: value,
-                    odds: odds, 
-                    potential_payout: potentialPayout,
-                    market_id: marketId || null
+                    game_id: gameId, user_pix: user.pix, user_name: user.name,
+                    bet_choice: betChoiceText, bet_value: value,
+                    odds: odds, potential_payout: potentialPayout
                 }
             }
         };
@@ -277,21 +238,13 @@ app.post('/webhook-mercadopago', async (req, res) => {
                 const game = await Game.findById(metadata.game_id);
                 const newBet = new Bet({
                     gameId: metadata.game_id,
-                    marketId: metadata.market_id || null,
                     gameTitle: game ? `${game.home.name} vs ${game.away.name}` : 'Jogo Desconhecido',
-                    betChoice: metadata.bet_choice, 
-                    betValue: Number(metadata.bet_value),
-                    date: new Date(), 
-                    user: { name: metadata.user_name, pix: metadata.user_pix },
-                    status: 'approved', 
-                    odds: metadata.odds, 
-                    potentialPayout: metadata.potential_payout
+                    betChoice: metadata.bet_choice, betValue: Number(metadata.bet_value),
+                    date: new Date(), user: { name: metadata.user_name, pix: metadata.user_pix },
+                    status: 'approved', odds: metadata.odds, potentialPayout: metadata.potential_payout
                 });
                 await newBet.save();
-                
-                if (!metadata.market_id) {
-                    updateOdds(metadata.game_id);
-                }
+                updateOdds(metadata.game_id);
             }
         }
         res.sendStatus(200);
@@ -367,6 +320,242 @@ app.get('/admin/dashboard', authAdmin, (req, res) => {
         </div></body></html>`);
 });
 
+app.get('/admin/financial-report', authAdmin, async (req, res) => {
+    try {
+        const bets = await Bet.find({ status: 'approved' }).populate('gameId').lean();
+        const finalizedGames = await Game.find({ status: 'finalizado' }).lean();
+
+        const reportData = [];
+        let totalLostValue = 0;
+        let totalToPay = 0;
+
+        for (const game of finalizedGames) {
+            const betsForGame = bets.filter(bet => bet.gameId && bet.gameId._id.equals(game._id));
+
+            for (const bet of betsForGame) {
+                let isWinner = false;
+                const gameResult = game.result; 
+                const betChoice = bet.betChoice; 
+
+                if (gameResult === 'empate' && betChoice === 'Empate') {
+                    isWinner = true;
+                } else if (gameResult === 'home' && betChoice === game.home.name) {
+                    isWinner = true;
+                } else if (gameResult === 'away' && betChoice === game.away.name) {
+                    isWinner = true;
+                }
+                
+                let resultText = 'Pendente';
+                 if (game.result === 'home') resultText = `Vencedor: ${game.home.name}`;
+                 else if (game.result === 'away') resultText = `Vencedor: ${game.away.name}`;
+                 else if (game.result === 'empate') resultText = 'Empate';
+
+                reportData.push({
+                    ...bet,
+                    gameResult: resultText,
+                    betStatus: isWinner ? 'Ganhou' : 'Perdeu',
+                    amountToPay: isWinner ? bet.potentialPayout : 0,
+                });
+
+                if (isWinner) {
+                    totalToPay += bet.potentialPayout;
+                } else {
+                    totalLostValue += bet.betValue;
+                }
+            }
+        }
+        
+        const balance = totalLostValue - totalToPay;
+
+        res.send(`
+            <!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><title>Relatório Financeiro</title><script src="https://cdn.tailwindcss.com"></script></head>
+            <body class="bg-gray-100 p-4 md:p-8">
+                <div class="container mx-auto bg-white p-6 rounded-lg shadow-md">
+                    <div class="flex flex-wrap justify-between items-center mb-6">
+                        <h1 class="text-3xl font-bold text-gray-800">Relatório Financeiro Detalhado</h1>
+                        <div>
+                            <a href="/admin/payment-summary" class="bg-yellow-500 text-white font-bold py-2 px-4 rounded-md hover:bg-yellow-600 mr-2">Ver Resumo de Pagamentos</a>
+                            <button id="export-csv" class="bg-green-600 text-white font-bold py-2 px-4 rounded-md hover:bg-green-700">Exportar para Excel (CSV)</button>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8 text-center">
+                        <div class="bg-red-100 p-4 rounded-lg"><p class="text-sm text-red-700">Total Arrecadado (Perdas)</p><p class="text-2xl font-bold text-red-800">R$ ${totalLostValue.toFixed(2)}</p></div>
+                        <div class="bg-blue-100 p-4 rounded-lg"><p class="text-sm text-blue-700">Total a Pagar (Ganhos)</p><p class="text-2xl font-bold text-blue-800">R$ ${totalToPay.toFixed(2)}</p></div>
+                        <div class="bg-green-100 p-4 rounded-lg"><p class="text-sm text-green-700">Balanço (Lucro)</p><p class="text-2xl font-bold text-green-800">R$ ${balance.toFixed(2)}</p></div>
+                    </div>
+                    
+                    <div class="flex items-center mb-4">
+                        <label for="gameFilter" class="mr-2 font-semibold">Filtrar por Jogo:</label>
+                        <select id="gameFilter" class="p-2 border rounded-md">
+                            <option value="all">Todos os Jogos</option>
+                            ${finalizedGames.map(g => `<option value="${g.home.name} vs ${g.away.name}">${g.home.name} vs ${g.away.name}</option>`).join('')}
+                        </select>
+                    </div>
+
+                    <div class="overflow-x-auto">
+                        <table id="report-table" class="min-w-full bg-white">
+                            <thead class="bg-gray-800 text-white">
+                                <tr>
+                                    <th class="py-3 px-4 text-left">Utilizador</th>
+                                    <th class="py-3 px-4 text-left">Chave PIX</th>
+                                    <th class="py-3 px-4 text-left">Jogo</th>
+                                    <th class="py-3 px-4 text-left">Palpite</th>
+                                    <th class="py-3 px-4 text-left">Resultado do Jogo</th>
+                                    <th class="py-3 px-4 text-left">Valor Aposta</th>
+                                    <th class="py-3 px-4 text-left">Status</th>
+                                    <th class="py-3 px-4 text-left">Valor a Pagar</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${reportData.length > 0 ? reportData.map(bet => `
+                                    <tr class="border-b" data-game-title="${bet.gameTitle}">
+                                        <td class="py-3 px-4">${bet.user.name}</td>
+                                        <td class="py-3 px-4">${bet.user.pix}</td>
+                                        <td class="py-3 px-4">${bet.gameTitle}</td>
+                                        <td class="py-3 px-4">${bet.betChoice}</td>
+                                        <td class="py-3 px-4">${bet.gameResult}</td>
+                                        <td class="py-3 px-4">R$ ${bet.betValue.toFixed(2)}</td>
+                                        <td class="py-3 px-4 font-semibold ${bet.betStatus === 'Ganhou' ? 'text-green-600' : 'text-red-600'}">${bet.betStatus}</td>
+                                        <td class="py-3 px-4 font-bold text-blue-700">R$ ${bet.amountToPay.toFixed(2)}</td>
+                                    </tr>
+                                `).join('') : `
+                                <tr>
+                                    <td colspan="8" class="text-center py-10 text-gray-500">
+                                        <p class="font-bold text-lg">Nenhum dado para exibir no relatório.</p>
+                                        <p>Isto pode acontecer porque ainda não há jogos finalizados que tenham apostas confirmadas.</p>
+                                    </td>
+                                </tr>
+                                `}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                <script>
+                    document.getElementById('gameFilter').addEventListener('change', function() {
+                        const selectedGame = this.value;
+                        const tableRows = document.querySelectorAll('#report-table tbody tr');
+                        tableRows.forEach(row => {
+                            if (selectedGame === 'all' || row.dataset.gameTitle === selectedGame) {
+                                row.style.display = '';
+                            } else {
+                                row.style.display = 'none';
+                            }
+                        });
+                    });
+
+                    function downloadCSV(csv, filename) {
+                        const csvFile = new Blob(["\\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
+                        const link = document.createElement("a");
+                        link.href = URL.createObjectURL(csvFile);
+                        link.download = filename;
+                        link.style.display = "none";
+                        document.body.appendChild(link);
+                        link.click();
+                        document.body.removeChild(link);
+                    }
+
+                    document.getElementById('export-csv').addEventListener('click', function() {
+                        const table = document.getElementById('report-table');
+                        const rows = table.querySelectorAll('tr');
+                        let csv = [];
+                        for (let i = 0; i < rows.length; i++) {
+                            const row = [], cols = rows[i].querySelectorAll('td, th');
+                            if (rows[i].style.display !== 'none') {
+                                for (let j = 0; j < cols.length; j++) {
+                                    row.push('"' + cols[j].innerText.replace(/\\n/g, ' ') + '"');
+                                }
+                                csv.push(row.join(','));
+                            }
+                        }
+                        downloadCSV(csv.join('\\n'), 'relatorio_financeiro_detalhado.csv');
+                    });
+                </script>
+            </body></html>
+        `);
+
+    } catch (error) {
+        console.error("Erro ao gerar relatório financeiro:", error);
+        res.status(500).send("Erro ao gerar o relatório financeiro.");
+    }
+});
+
+// NOVA ROTA PARA O RESUMO DE PAGAMENTOS
+app.get('/admin/payment-summary', authAdmin, async (req, res) => {
+    try {
+        const bets = await Bet.find({ status: 'approved' }).populate('gameId').lean();
+        const finalizedGames = await Game.find({ status: 'finalizado' }).lean();
+
+        const paymentsByUser = {};
+
+        for (const game of finalizedGames) {
+            const betsForGame = bets.filter(bet => bet.gameId && bet.gameId._id.equals(game._id));
+
+            for (const bet of betsForGame) {
+                let isWinner = false;
+                const gameResult = game.result; 
+                const betChoice = bet.betChoice; 
+
+                if (gameResult === 'empate' && betChoice === 'Empate') isWinner = true;
+                else if (gameResult === 'home' && betChoice === game.home.name) isWinner = true;
+                else if (gameResult === 'away' && betChoice === game.away.name) isWinner = true;
+
+                if (isWinner) {
+                    const userPix = bet.user.pix;
+                    if (!paymentsByUser[userPix]) {
+                        paymentsByUser[userPix] = { name: bet.user.name, totalToPay: 0 };
+                    }
+                    paymentsByUser[userPix].totalToPay += bet.potentialPayout;
+                }
+            }
+        }
+
+        res.send(`
+             <!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><title>Resumo de Pagamentos</title><script src="https://cdn.tailwindcss.com"></script></head>
+            <body class="bg-gray-100 p-4 md:p-8">
+                <div class="container mx-auto bg-white p-6 rounded-lg shadow-md max-w-4xl">
+                    <div class="flex justify-between items-center mb-6">
+                        <h1 class="text-3xl font-bold text-gray-800">Resumo de Pagamentos</h1>
+                        <a href="/admin/financial-report" class="bg-blue-500 text-white font-bold py-2 px-4 rounded-md hover:bg-blue-600">Voltar ao Relatório Detalhado</a>
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full bg-white">
+                            <thead class="bg-gray-800 text-white">
+                                <tr>
+                                    <th class="py-3 px-4 text-left">Utilizador</th>
+                                    <th class="py-3 px-4 text-left">Chave PIX</th>
+                                    <th class="py-3 px-4 text-left">Valor Total a Pagar</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${Object.keys(paymentsByUser).length > 0 ? Object.entries(paymentsByUser).map(([pix, data]) => `
+                                    <tr class="border-b">
+                                        <td class="py-3 px-4">${data.name}</td>
+                                        <td class="py-3 px-4">${pix}</td>
+                                        <td class="py-3 px-4 font-bold text-blue-700">R$ ${data.totalToPay.toFixed(2)}</td>
+                                    </tr>
+                                `).join('') : `
+                                <tr><td colspan="3" class="text-center py-10 text-gray-500">Nenhum pagamento a ser feito no momento.</td></tr>
+                                `}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </body></html>
+        `);
+
+    } catch (error) {
+        console.error("Erro ao gerar resumo de pagamentos:", error);
+        res.status(500).send("Erro ao gerar o resumo de pagamentos.");
+    }
+});
+
+
+app.post('/admin/logout', (req, res) => {
+    res.clearCookie('admin_token');
+    res.redirect('/admin');
+});
+
 app.get('/admin/games', authAdmin, async (req, res) => {
     try {
         const games = await Game.find().sort({ date: -1 });
@@ -384,47 +573,18 @@ app.get('/admin/games', authAdmin, async (req, res) => {
                         <input name="competition" placeholder="Competição" class="p-2 border rounded" required>
                     </div>
                      <div>
-                        <h3 class="font-semibold mb-2">Detalhes da Aposta Principal (1x2)</h3>
+                        <h3 class="font-semibold mb-2">Detalhes da Aposta</h3>
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                            <input type="number" step="0.01" name="max_bet_value" placeholder="Valor Máx. por Aposta (R$)" class="p-2 border rounded" value="35" required>
                         </div>
-                        <div class="grid grid-cols-3 gap-4 mt-2">
+                    </div>
+                    <div><h3 class="font-semibold mb-2">Odds Iniciais</h3>
+                        <div class="grid grid-cols-3 gap-4">
                            <input type="number" step="0.01" name="odds_home" placeholder="Odd Casa (ex: 1.5)" class="p-2 border rounded" required>
                            <input type="number" step="0.01" name="odds_draw" placeholder="Odd Empate (ex: 3.0)" class="p-2 border rounded" required>
                            <input type="number" step="0.01" name="odds_away" placeholder="Odd Visitante (ex: 2.5)" class="p-2 border rounded" required>
                         </div>
                     </div>
-                    
-                    <div class="border-t pt-4 mt-4">
-                        <h3 class="font-semibold mb-2 flex items-center">
-                            <input type="checkbox" id="add_goal_markets" name="add_goal_markets" class="mr-2 h-5 w-5">
-                            <label for="add_goal_markets">Adicionar Apostas por Gol?</label>
-                        </h3>
-                        <div id="goal_markets_inputs" class="hidden space-y-3">
-                            <div class="p-3 bg-gray-50 rounded border">
-                                <label class="font-medium">Total de Gols (Mais/Menos 2.5)</label>
-                                <div class="grid grid-cols-2 gap-4 mt-1">
-                                    <input type="number" step="0.01" name="odds_over_2_5" placeholder="Odd Mais 2.5" class="p-2 border rounded">
-                                    <input type="number" step="0.01" name="odds_under_2_5" placeholder="Odd Menos 2.5" class="p-2 border rounded">
-                                </div>
-                            </div>
-                            <div class="p-3 bg-gray-50 rounded border">
-                                <label class="font-medium">Time da Casa - Total de Gols (Mais/Menos 2.5)</label>
-                                <div class="grid grid-cols-2 gap-4 mt-1">
-                                    <input type="number" step="0.01" name="odds_home_total_over" placeholder="Odd Mais 2.5" class="p-2 border rounded">
-                                    <input type="number" step="0.01" name="odds_home_total_under" placeholder="Odd Menos 2.5" class="p-2 border rounded">
-                                </div>
-                            </div>
-                            <div class="p-3 bg-gray-50 rounded border">
-                                <label class="font-medium">Time Visitante - Total de Gols (Mais/Menos 2.5)</label>
-                                <div class="grid grid-cols-2 gap-4 mt-1">
-                                    <input type="number" step="0.01" name="odds_away_total_over" placeholder="Odd Mais 2.5" class="p-2 border rounded">
-                                    <input type="number" step="0.01" name="odds_away_total_under" placeholder="Odd Menos 2.5" class="p-2 border rounded">
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
                     <button type="submit" class="w-full bg-blue-500 text-white p-3 rounded hover:bg-blue-600 font-bold">Adicionar Jogo</button>
                 </form>
             </div>
@@ -433,128 +593,49 @@ app.get('/admin/games', authAdmin, async (req, res) => {
                 <div class="space-y-4">${games.map(game => `
                     <div class="border p-4 rounded-lg">
                         <p class="font-bold text-lg">${game.home.name} vs ${game.away.name}</p>
-                        <p class="text-sm"><b>Principal:</b> Casa ${game.odds.home.toFixed(2)} | Empate ${game.odds.draw.toFixed(2)} | Visitante ${game.odds.away.toFixed(2)}</p>
-                        ${game.goalMarkets.map(market => `<p class="text-sm"><b>${market.label}:</b> Opção 1: ${market.odds.option1.toFixed(2)} | Opção 2: ${market.odds.option2.toFixed(2)}</p>`).join('')}
+                        <p class="text-sm">Odds: Casa ${game.odds.home.toFixed(2)} | Empate ${game.odds.draw.toFixed(2)} | Visitante ${game.odds.away.toFixed(2)}</p>
                         <p>Status: <span class="font-semibold">${game.status}</span> | Resultado: <span class="font-semibold">${game.result}</span> | Limite Aposta: <span class="font-semibold">R$ ${game.maxBetValue.toFixed(2)}</span></p>
                         <div class="mt-2">
                             ${game.status === 'aberto' ? `<a href="/admin/edit-game/${game._id}" class="bg-blue-500 text-white px-3 py-1 rounded text-sm mr-2">Editar Jogo</a><form action="/admin/close-game/${game._id}" method="post" class="inline-block"><button class="bg-yellow-500 text-white px-3 py-1 rounded text-sm">Fechar Apostas</button></form>` : ''}
                             ${game.status === 'fechado' ? `<form action="/admin/finalize-game/${game._id}" method="post"><select name="result" class="p-2 border rounded"><option value="home">Vencedor: ${game.home.name}</option><option value="away">Vencedor: ${game.away.name}</option><option value="empate">Empate</option></select><button type="submit" class="bg-green-500 text-white px-3 py-1 rounded text-sm ml-2">Finalizar Jogo</button></form>` : ''}
                         </div>
                     </div>`).join('')}
-                </div></div>
-                <script>
-                    document.getElementById('add_goal_markets').addEventListener('change', function() {
-                        document.getElementById('goal_markets_inputs').classList.toggle('hidden', !this.checked);
-                    });
-                </script>
-                </div></body></html>`);
+                </div></div></div></body></html>`);
     } catch (error) { res.status(500).send("Erro ao carregar jogos."); }
 });
 
 app.post('/admin/add-game', authAdmin, async (req, res) => {
     try {
-        const { home_name, home_logo, away_name, away_logo, date, competition, odds_home, odds_draw, odds_away, max_bet_value, add_goal_markets } = req.body;
-        
-        const newGameData = {
+        const { home_name, home_logo, away_name, away_logo, date, competition, odds_home, odds_draw, odds_away, max_bet_value } = req.body;
+        const newGame = new Game({
             home: { name: home_name, logo: home_logo },
             away: { name: away_name, logo: away_logo },
             date, competition,
             odds: { home: parseFloat(odds_home), draw: parseFloat(odds_draw), away: parseFloat(odds_away) },
             initialOdds: { home: parseFloat(odds_home), draw: parseFloat(odds_draw), away: parseFloat(odds_away) },
-            maxBetValue: parseFloat(max_bet_value),
-            goalMarkets: []
-        };
-
-        if (add_goal_markets === 'on') {
-            const { odds_over_2_5, odds_under_2_5, odds_home_total_over, odds_home_total_under, odds_away_total_over, odds_away_total_under } = req.body;
-            if (odds_over_2_5 && odds_under_2_5) {
-                newGameData.goalMarkets.push({
-                    marketType: 'total_goals',
-                    specifier: '2.5',
-                    label: 'Total de Gols (Mais/Menos 2.5)',
-                    odds: { option1: parseFloat(odds_over_2_5), option2: parseFloat(odds_under_2_5) },
-                    initialOdds: { option1: parseFloat(odds_over_2_5), option2: parseFloat(odds_under_2_5) }
-                });
-            }
-            if (odds_home_total_over && odds_home_total_under) {
-                 newGameData.goalMarkets.push({
-                    marketType: 'team_total_goals',
-                    specifier: 'home',
-                    label: `${home_name} - Total de Gols (Mais/Menos 2.5)`,
-                    odds: { option1: parseFloat(odds_home_total_over), option2: parseFloat(odds_home_total_under) },
-                    initialOdds: { option1: parseFloat(odds_home_total_over), option2: parseFloat(odds_home_total_under) }
-                });
-            }
-            if (odds_away_total_over && odds_away_total_under) {
-                 newGameData.goalMarkets.push({
-                    marketType: 'team_total_goals',
-                    specifier: 'away',
-                    label: `${away_name} - Total de Gols (Mais/Menos 2.5)`,
-                    odds: { option1: parseFloat(odds_away_total_over), option2: parseFloat(odds_away_total_under) },
-                    initialOdds: { option1: parseFloat(odds_away_total_over), option2: parseFloat(odds_away_total_under) }
-                });
-            }
-        }
-
-        const newGame = new Game(newGameData);
+            maxBetValue: parseFloat(max_bet_value)
+        });
         await newGame.save();
         res.redirect('/admin/games');
-    } catch (error) { 
-        console.error(error);
-        res.status(500).send("Erro ao adicionar jogo."); 
-    }
+    } catch (error) { res.status(500).send("Erro ao adicionar jogo."); }
 });
-
 
 app.get('/admin/edit-game/:id', authAdmin, async(req, res) => {
     try {
         const game = await Game.findById(req.params.id);
         if (!game) return res.status(404).send('Jogo não encontrado');
-
-        const totalGoalsMarket = game.goalMarkets.find(m => m.marketType === 'total_goals');
-        const homeTeamTotalGoalsMarket = game.goalMarkets.find(m => m.marketType === 'team_total_goals' && m.specifier === 'home');
-        const awayTeamTotalGoalsMarket = game.goalMarkets.find(m => m.marketType === 'team_total_goals' && m.specifier === 'away');
-
         res.send(`<!DOCTYPE html>
             <html lang="pt-BR"><head><title>Editar Jogo</title><script src="https://cdn.tailwindcss.com"></script></head>
             <body class="bg-gray-100 p-8"><div class="container mx-auto max-w-lg">
             <h1 class="text-3xl font-bold mb-6">Editar Jogo: ${game.home.name} vs ${game.away.name}</h1>
             <div class="bg-white p-6 rounded shadow-md">
                 <form action="/admin/edit-game/${game._id}" method="post" class="space-y-4">
-                    <h3 class="font-bold text-lg pt-2">Mercado Principal (1x2)</h3>
                     <div><label class="block font-semibold">Valor Máx. por Aposta (R$)</label><input type="number" step="0.01" name="max_bet_value" value="${game.maxBetValue}" class="w-full p-2 border rounded" required></div>
+                    <hr/>
+                    <h3 class="font-bold text-lg pt-2">Odds</h3>
                     <div><label class="block font-semibold">Odd Casa</label><input type="number" step="0.01" name="odds_home" value="${game.odds.home}" class="w-full p-2 border rounded" required></div>
                     <div><label class="block font-semibold">Odd Empate</label><input type="number" step="0.01" name="odds_draw" value="${game.odds.draw}" class="w-full p-2 border rounded" required></div>
                     <div><label class="block font-semibold">Odd Visitante</label><input type="number" step="0.01" name="odds_away" value="${game.odds.away}" class="w-full p-2 border rounded" required></div>
-                    <hr/>
-                    
-                    ${totalGoalsMarket ? `
-                    <div class="pt-2">
-                        <h3 class="font-bold text-lg">Total de Gols (Mais/Menos 2.5)</h3>
-                        <input type="hidden" name="total_goals_market_id" value="${totalGoalsMarket._id}">
-                        <div><label class="block font-semibold">Odd Mais 2.5</label><input type="number" step="0.01" name="odds_over_2_5" value="${totalGoalsMarket.odds.option1}" class="w-full p-2 border rounded"></div>
-                        <div><label class="block font-semibold">Odd Menos 2.5</label><input type="number" step="0.01" name="odds_under_2_5" value="${totalGoalsMarket.odds.option2}" class="w-full p-2 border rounded"></div>
-                    </div>
-                    ` : ''}
-
-                    ${homeTeamTotalGoalsMarket ? `
-                    <div class="pt-2">
-                        <h3 class="font-bold text-lg">${homeTeamTotalGoalsMarket.label}</h3>
-                        <input type="hidden" name="home_total_goals_market_id" value="${homeTeamTotalGoalsMarket._id}">
-                        <div><label class="block font-semibold">Odd Mais 2.5</label><input type="number" step="0.01" name="odds_home_total_over" value="${homeTeamTotalGoalsMarket.odds.option1}" class="w-full p-2 border rounded"></div>
-                        <div><label class="block font-semibold">Odd Menos 2.5</label><input type="number" step="0.01" name="odds_home_total_under" value="${homeTeamTotalGoalsMarket.odds.option2}" class="w-full p-2 border rounded"></div>
-                    </div>
-                    ` : ''}
-
-                    ${awayTeamTotalGoalsMarket ? `
-                    <div class="pt-2">
-                        <h3 class="font-bold text-lg">${awayTeamTotalGoalsMarket.label}</h3>
-                        <input type="hidden" name="away_total_goals_market_id" value="${awayTeamTotalGoalsMarket._id}">
-                        <div><label class="block font-semibold">Odd Mais 2.5</label><input type="number" step="0.01" name="odds_away_total_over" value="${awayTeamTotalGoalsMarket.odds.option1}" class="w-full p-2 border rounded"></div>
-                        <div><label class="block font-semibold">Odd Menos 2.5</label><input type="number" step="0.01" name="odds_away_total_under" value="${awayTeamTotalGoalsMarket.odds.option2}" class="w-full p-2 border rounded"></div>
-                    </div>
-                    ` : ''}
-
                     <button type="submit" class="w-full bg-blue-500 text-white p-3 rounded hover:bg-blue-600 font-bold">Salvar Alterações</button>
                     <a href="/admin/games" class="block text-center mt-2">Cancelar</a>
                 </form>
@@ -565,37 +646,16 @@ app.get('/admin/edit-game/:id', authAdmin, async(req, res) => {
 app.post('/admin/edit-game/:id', authAdmin, async(req, res) => {
     try {
         const { odds_home, odds_draw, odds_away, max_bet_value } = req.body;
-        const game = await Game.findById(req.params.id);
-
-        game.odds.home = parseFloat(odds_home);
-        game.odds.draw = parseFloat(odds_draw);
-        game.odds.away = parseFloat(odds_away);
-        game.maxBetValue = parseFloat(max_bet_value);
-
-        const { total_goals_market_id, odds_over_2_5, odds_under_2_5, home_total_goals_market_id, odds_home_total_over, odds_home_total_under, away_total_goals_market_id, odds_away_total_over, odds_away_total_under } = req.body;
-        
-        if(total_goals_market_id) {
-            const market = game.goalMarkets.id(total_goals_market_id);
-            market.odds.option1 = parseFloat(odds_over_2_5);
-            market.odds.option2 = parseFloat(odds_under_2_5);
-        }
-        if(home_total_goals_market_id) {
-            const market = game.goalMarkets.id(home_total_goals_market_id);
-            market.odds.option1 = parseFloat(odds_home_total_over);
-            market.odds.option2 = parseFloat(odds_home_total_under);
-        }
-        if(away_total_goals_market_id) {
-            const market = game.goalMarkets.id(away_total_goals_market_id);
-            market.odds.option1 = parseFloat(odds_away_total_over);
-            market.odds.option2 = parseFloat(odds_away_total_under);
-        }
-        
-        await game.save();
+        await Game.findByIdAndUpdate(req.params.id, {
+            $set: {
+                'odds.home': parseFloat(odds_home),
+                'odds.draw': parseFloat(odds_draw),
+                'odds.away': parseFloat(odds_away),
+                'maxBetValue': parseFloat(max_bet_value)
+            }
+        });
         res.redirect('/admin/games');
-    } catch(error){ 
-        console.log(error);
-        res.status(500).send("Erro ao salvar alterações."); 
-    }
+    } catch(error){ res.status(500).send("Erro ao salvar alterações."); }
 });
 
 
