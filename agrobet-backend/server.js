@@ -45,7 +45,8 @@ const BetSchema = new mongoose.Schema({
     user: { name: String, pix: String },
     status: { type: String, default: 'pending' },
     odds: { type: Number, required: true },
-    potentialPayout: { type: Number, required: true }
+    potentialPayout: { type: Number, required: true },
+    userVisible: { type: Boolean, default: true } // Campo para controlar a visibilidade do histórico do utilizador
 });
 const Bet = mongoose.model('Bet', BetSchema);
 
@@ -84,8 +85,8 @@ async function updateOdds(gameId) {
         const VIG = 0.20; // Margem de 20% para a casa
         const PAYOUT_RATE = 1 - VIG;
         const MIN_ODD = 1.01;
-        const MAX_ODD = 4.20; // Teto de segurança para as odds
-        const STARTING_POOL = 30; // Começa a ajustar as odds a partir de R$ 30
+        const MAX_ODD = 4.50; // Teto de segurança para as odds
+        const STARTING_POOL = 40; // Começa a ajustar as odds a partir de R$ 40
         const MATURITY_POOL = 120; // Aos R$ 120, o peso do dinheiro é maior
 
         const game = await Game.findById(gameId);
@@ -251,9 +252,26 @@ app.post('/webhook-mercadopago', async (req, res) => {
     } catch (error) { res.sendStatus(500); }
 });
 
+app.post('/archive-bets', async (req, res) => {
+    const { pix } = req.body;
+    if (!pix) {
+        return res.status(400).json({ success: false, message: 'PIX do utilizador é necessário.' });
+    }
+    try {
+        await Bet.updateMany(
+            { 'user.pix': pix, status: 'approved' },
+            { $set: { userVisible: false } }
+        );
+        res.json({ success: true, message: 'Histórico de apostas arquivado com sucesso.' });
+    } catch (error) {
+        console.error("Erro ao arquivar apostas:", error);
+        res.status(500).json({ success: false, message: 'Erro no servidor ao arquivar apostas.' });
+    }
+});
+
 app.get('/my-bets/:pix', async (req, res) => {
     try {
-        const bets = await Bet.find({ 'user.pix': req.params.pix, status: 'approved' }).sort({ date: -1 });
+        const bets = await Bet.find({ 'user.pix': req.params.pix, status: 'approved', userVisible: true }).sort({ date: -1 });
         res.json({ success: true, bets });
     } catch (error) { res.json({ success: false, message: 'Erro ao buscar apostas.' }); }
 });
@@ -676,4 +694,3 @@ app.post('/admin/finalize-game/:id', authAdmin, async (req, res) => {
 
 const PORT = process.env.PORT || 10000;
 app.listen(PORT, () => console.log(`--> Servidor AgroBet a correr na porta ${PORT}`));
-
