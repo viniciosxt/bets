@@ -59,7 +59,18 @@
          <div class="bg-white rounded-lg p-6 max-w-2xl w-full mx-4 max-h-[80vh] overflow-y-auto">
              <div class="flex justify-between items-center mb-4">
                  <h3 class="title-font text-2xl text-green-800">Minhas Apostas Confirmadas</h3>
-                 <button id="close-my-bets" class="text-gray-500 hover:text-gray-800 text-2xl">&times;</button>
+                 <div class="flex items-center space-x-2">
+                    <button id="archive-bets-btn" class="bg-yellow-500 text-white px-3 py-1 rounded-md text-sm font-bold hover:bg-yellow-600 transition hidden">Limpar Histórico</button>
+                    <button id="close-my-bets" class="text-gray-500 hover:text-gray-800 text-2xl">&times;</button>
+                 </div>
+             </div>
+             <div id="archive-confirmation" class="hidden bg-yellow-100 border-l-4 border-yellow-500 text-yellow-700 p-4 mb-4 rounded-md" role="alert">
+                <p class="font-bold">Atenção!</p>
+                <p>Esta ação irá remover as suas apostas desta lista. Elas não serão apagadas, mas ficarão ocultas. Deseja continuar?</p>
+                <div class="mt-2">
+                    <button id="confirm-archive-btn" class="bg-red-600 text-white font-bold py-1 px-3 rounded text-sm mr-2">Sim, ocultar</button>
+                    <button id="cancel-archive-btn" class="bg-gray-400 text-white font-bold py-1 px-3 rounded text-sm">Cancelar</button>
+                </div>
              </div>
              <div id="my-bets-list" class="space-y-3"></div>
          </div>
@@ -346,10 +357,15 @@
         async function displayMyBets() {
             if (!currentUser) return;
             const listElement = document.getElementById('my-bets-list');
+            const archiveBtn = document.getElementById('archive-bets-btn');
+            const archiveConfirmationDiv = document.getElementById('archive-confirmation');
+            
+            // Reset state
+            archiveConfirmationDiv.classList.add('hidden');
+            
             listElement.innerHTML = '<p class="text-gray-500">A carregar apostas...</p>';
             myBetsModal.classList.remove('hidden');
 
-            // Re-utiliza os dados já carregados
             if (currentUserBets.length > 0) {
                  listElement.innerHTML = currentUserBets.map(bet => `
                     <div class="border rounded-md p-3 bg-gray-50">
@@ -359,8 +375,10 @@
                         <p class="text-sm text-gray-500">${new Date(bet.date).toLocaleString('pt-BR')}</p>
                     </div>
                 `).join('');
+                archiveBtn.classList.remove('hidden'); // Mostra o botão se houver apostas
             } else {
                  listElement.innerHTML = '<p class="text-gray-500">Ainda não tem nenhuma aposta confirmada.</p>';
+                 archiveBtn.classList.add('hidden'); // Oculta o botão se não houver apostas
             }
         }
 
@@ -379,9 +397,58 @@
             logoutBtn.addEventListener('click', logout);
             document.getElementById('my-bets-btn').addEventListener('click', displayMyBets);
             document.getElementById('close-my-bets').addEventListener('click', () => { myBetsModal.classList.add('hidden'); });
+            
+            // --- LÓGICA PARA LIMPAR/ARQUIVAR HISTÓRICO ---
+            const archiveBtn = document.getElementById('archive-bets-btn');
+            const archiveConfirmationDiv = document.getElementById('archive-confirmation');
+            const confirmArchiveBtn = document.getElementById('confirm-archive-btn');
+            const cancelArchiveBtn = document.getElementById('cancel-archive-btn');
+            const myBetsList = document.getElementById('my-bets-list');
+
+            archiveBtn.addEventListener('click', () => {
+                archiveConfirmationDiv.classList.remove('hidden');
+                archiveBtn.classList.add('hidden');
+            });
+
+            cancelArchiveBtn.addEventListener('click', () => {
+                archiveConfirmationDiv.classList.add('hidden');
+                archiveBtn.classList.remove('hidden');
+            });
+
+            confirmArchiveBtn.addEventListener('click', async () => {
+                if (!currentUser || !currentUser.pix) return;
+
+                loadingModal.querySelector('p').textContent = 'A limpar histórico...';
+                loadingModal.classList.remove('hidden');
+                archiveConfirmationDiv.classList.add('hidden');
+
+                try {
+                    const response = await fetch(`${SERVER_URL}/archive-bets`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ pix: currentUser.pix }),
+                        credentials: 'include'
+                    });
+                    const data = await response.json();
+                    if (data.success) {
+                        currentUserBets = []; // Limpa o cache local
+                        myBetsList.innerHTML = '<p class="text-green-600 font-bold text-center py-4">Histórico limpo com sucesso!</p>';
+                        archiveBtn.classList.add('hidden');
+                    } else {
+                        myBetsList.insertAdjacentHTML('afterbegin', `<p class="text-red-500 text-center font-bold mb-2">${data.message || 'Não foi possível limpar o histórico.'}</p>`);
+                        archiveBtn.classList.remove('hidden');
+                    }
+                } catch (error) {
+                    console.error("Erro ao arquivar apostas:", error);
+                    myBetsList.insertAdjacentHTML('afterbegin', `<p class="text-red-500 text-center font-bold mb-2">Erro de comunicação com o servidor.</p>`);
+                    archiveBtn.classList.remove('hidden');
+                } finally {
+                    loadingModal.classList.add('hidden');
+                }
+            });
+
             checkStoredUser();
         });
     </script>
 </body>
 </html>
-
