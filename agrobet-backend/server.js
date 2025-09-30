@@ -45,8 +45,7 @@ const BetSchema = new mongoose.Schema({
     user: { name: String, pix: String },
     status: { type: String, default: 'pending' },
     odds: { type: Number, required: true },
-    potentialPayout: { type: Number, required: true },
-    userVisible: { type: Boolean, default: true } // Campo para controlar a visibilidade do histórico do utilizador
+    potentialPayout: { type: Number, required: true }
 });
 const Bet = mongoose.model('Bet', BetSchema);
 
@@ -252,26 +251,9 @@ app.post('/webhook-mercadopago', async (req, res) => {
     } catch (error) { res.sendStatus(500); }
 });
 
-app.post('/archive-bets', async (req, res) => {
-    const { pix } = req.body;
-    if (!pix) {
-        return res.status(400).json({ success: false, message: 'PIX do utilizador é necessário.' });
-    }
-    try {
-        await Bet.updateMany(
-            { 'user.pix': pix, status: 'approved' },
-            { $set: { userVisible: false } }
-        );
-        res.json({ success: true, message: 'Histórico de apostas arquivado com sucesso.' });
-    } catch (error) {
-        console.error("Erro ao arquivar apostas:", error);
-        res.status(500).json({ success: false, message: 'Erro no servidor ao arquivar apostas.' });
-    }
-});
-
 app.get('/my-bets/:pix', async (req, res) => {
     try {
-        const bets = await Bet.find({ 'user.pix': req.params.pix, status: 'approved', userVisible: true }).sort({ date: -1 });
+        const bets = await Bet.find({ 'user.pix': req.params.pix, status: 'approved' }).sort({ date: -1 });
         res.json({ success: true, bets });
     } catch (error) { res.json({ success: false, message: 'Erro ao buscar apostas.' }); }
 });
@@ -334,7 +316,19 @@ app.get('/admin/dashboard', authAdmin, (req, res) => {
         <a href="/relatorio" target="_blank" class="bg-gray-500 hover:bg-gray-600 text-white font-bold py-6 px-4 rounded-lg text-xl transition-transform transform hover:scale-105 flex flex-col justify-center">Relatório Geral<span class="text-xs font-normal">(Todas as apostas)</span></a>
         <a href="/admin/financial-report" target="_blank" class="bg-green-600 hover:bg-green-700 text-white font-bold py-6 px-4 rounded-lg text-xl transition-transform transform hover:scale-105 flex flex-col justify-center">Relatório Financeiro<span class="text-xs font-normal">(Balanço e Detalhes)</span></a>
         <a href="/admin/payment-summary" target="_blank" class="bg-yellow-500 hover:bg-yellow-600 text-white font-bold py-6 px-4 rounded-lg text-xl transition-transform transform hover:scale-105 flex flex-col justify-center">Resumo de Pagamentos<span class="text-xs font-normal">(Valores por pessoa)</span></a>
-        </div><form action="/admin/logout" method="post" class="mt-8"><button type="submit" class="bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-6 rounded-lg">Sair</button></form>
+        </div>
+        
+        <!-- Seção de Ações Perigosas -->
+        <div class="mt-12 border-t-2 pt-6">
+            <h2 class="text-2xl font-bold text-red-700 mb-4">Ações Irreversíveis</h2>
+            <form action="/admin/clear-history" method="post" onsubmit="return confirm('Tem a certeza de que pretende limpar TODO o histórico de apostas e jogos finalizados? Esta ação não pode ser desfeita.');">
+                <button type="submit" class="bg-red-600 hover:bg-red-800 text-white font-bold py-3 px-6 rounded-lg transition-transform transform hover:scale-105">
+                    Limpar Histórico de Apostas Antigas
+                </button>
+            </form>
+        </div>
+
+        <form action="/admin/logout" method="post" class="mt-8"><button type="submit" class="bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-6 rounded-lg">Sair</button></form>
         </div></body></html>`);
 });
 
@@ -568,6 +562,20 @@ app.get('/admin/payment-summary', authAdmin, async (req, res) => {
     }
 });
 
+// NOVA ROTA PARA LIMPAR HISTÓRICO
+app.post('/admin/clear-history', authAdmin, async (req, res) => {
+    try {
+        // Deleta todas as apostas do banco de dados
+        await Bet.deleteMany({});
+        // Deleta todos os jogos que já foram marcados como 'finalizado'
+        await Game.deleteMany({ status: 'finalizado' });
+        
+        res.redirect('/admin/dashboard');
+    } catch (error) {
+        console.error("Erro ao limpar o histórico:", error);
+        res.status(500).send("Erro ao limpar o histórico de apostas.");
+    }
+});
 
 app.post('/admin/logout', (req, res) => {
     res.clearCookie('admin_token');
