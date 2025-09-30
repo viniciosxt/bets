@@ -205,7 +205,7 @@
                 const confirmBtn = card.querySelector('.confirm-btn');
                 const errorEl = card.querySelector('.bet-error');
 
-                if (confirmBtn.disabled) return; // Se o botão já estiver desativado, não adicione listeners
+                if (confirmBtn.disabled) return; 
 
                 betOptions.addEventListener('click', e => {
                     const button = e.target.closest('button.bet-option');
@@ -230,10 +230,9 @@
                 }
 
                 confirmBtn.addEventListener('click', () => {
-                    errorEl.textContent = ''; // Limpa erro anterior
+                    errorEl.textContent = ''; 
                     const value = parseFloat(valueInput.value);
 
-                    // Validação do lado do cliente
                     if (value > parseFloat(valueInput.max)) {
                         errorEl.textContent = `O valor máximo restante é R$ ${parseFloat(valueInput.max).toFixed(2)}.`;
                         return;
@@ -360,7 +359,6 @@
             const archiveBtn = document.getElementById('archive-bets-btn');
             const archiveConfirmationDiv = document.getElementById('archive-confirmation');
             
-            // Reset state
             archiveConfirmationDiv.classList.add('hidden');
             
             listElement.innerHTML = '<p class="text-gray-500">A carregar apostas...</p>';
@@ -375,10 +373,10 @@
                         <p class="text-sm text-gray-500">${new Date(bet.date).toLocaleString('pt-BR')}</p>
                     </div>
                 `).join('');
-                archiveBtn.classList.remove('hidden'); // Mostra o botão se houver apostas
+                archiveBtn.classList.remove('hidden');
             } else {
                  listElement.innerHTML = '<p class="text-gray-500">Ainda não tem nenhuma aposta confirmada.</p>';
-                 archiveBtn.classList.add('hidden'); // Oculta o botão se não houver apostas
+                 archiveBtn.classList.add('hidden');
             }
         }
 
@@ -398,7 +396,6 @@
             document.getElementById('my-bets-btn').addEventListener('click', displayMyBets);
             document.getElementById('close-my-bets').addEventListener('click', () => { myBetsModal.classList.add('hidden'); });
             
-            // --- LÓGICA PARA LIMPAR/ARQUIVAR HISTÓRICO ---
             const archiveBtn = document.getElementById('archive-bets-btn');
             const archiveConfirmationDiv = document.getElementById('archive-confirmation');
             const confirmArchiveBtn = document.getElementById('confirm-archive-btn');
@@ -431,7 +428,7 @@
                     });
                     const data = await response.json();
                     if (data.success) {
-                        currentUserBets = []; // Limpa o cache local
+                        currentUserBets = []; 
                         myBetsList.innerHTML = '<p class="text-green-600 font-bold text-center py-4">Histórico limpo com sucesso!</p>';
                         archiveBtn.classList.add('hidden');
                     } else {
@@ -452,3 +449,4 @@
     </script>
 </body>
 </html>
+
