@@ -817,16 +817,546 @@
             .result-card { display: grid; }
             .winner { justify-self: start; text-align: left; }
         }
+
+        /* Sportsbook layout */
+        body {
+            background: #101713;
+        }
+
+        .shell {
+            width: min(1420px, calc(100% - 24px));
+        }
+
+        .topbar {
+            background: #18241d;
+            border-bottom: 1px solid #29352e;
+            backdrop-filter: none;
+        }
+
+        .nav {
+            min-height: 54px;
+        }
+
+        .brand-mark {
+            width: 34px;
+            height: 34px;
+            box-shadow: none;
+            background: #35b768;
+        }
+
+        .brand strong {
+            color: #f5d45f;
+            font-size: 1.08rem;
+            font-weight: 900;
+        }
+
+        .brand span {
+            display: none;
+        }
+
+        .primary-btn,
+        .ghost-btn,
+        .icon-btn {
+            min-height: 34px;
+            border-radius: 3px;
+            box-shadow: none;
+            font-size: 0.84rem;
+        }
+
+        .primary-btn {
+            background: #f5d45f;
+            color: #1b211d;
+        }
+
+        .ghost-btn,
+        .icon-btn,
+        .user-pill {
+            background: #243128;
+            border-color: #33423a;
+        }
+
+        .sportsbar {
+            position: sticky;
+            top: 55px;
+            z-index: 25;
+            background: #223028;
+            border-bottom: 1px solid #344139;
+        }
+
+        .sportsbar-scroll {
+            display: flex;
+            gap: 2px;
+            overflow-x: auto;
+            padding: 0;
+            scrollbar-width: thin;
+        }
+
+        .sport-tab {
+            min-width: max-content;
+            min-height: 43px;
+            border: 0;
+            border-left: 1px solid rgba(255, 255, 255, 0.06);
+            background: transparent;
+            color: #c7d0ca;
+            padding: 0 16px;
+            display: inline-flex;
+            align-items: center;
+            gap: 9px;
+            font-weight: 700;
+            font-size: 0.84rem;
+        }
+
+        .sport-tab.is-active {
+            background: #35b768;
+            color: #06110b;
+        }
+
+        .sportsbook {
+            padding: 12px 0 28px;
+        }
+
+        .promo-strip {
+            min-height: 86px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 16px;
+            padding: 16px 18px;
+            border: 1px solid #324039;
+            border-radius: 3px;
+            background:
+                linear-gradient(90deg, rgba(245, 212, 95, 0.2), transparent 46%),
+                #17231c;
+            margin-bottom: 12px;
+        }
+
+        .promo-strip h1 {
+            margin: 0;
+            font-size: clamp(1.35rem, 3vw, 2.1rem);
+            letter-spacing: 0;
+        }
+
+        .promo-strip p {
+            margin: 5px 0 0;
+            color: #aeb9b2;
+            font-size: 0.9rem;
+        }
+
+        .market-grid {
+            display: grid;
+            grid-template-columns: 244px minmax(0, 1fr) 300px;
+            gap: 10px;
+            align-items: start;
+        }
+
+        .left-rail,
+        .betslip,
+        .market-panel,
+        .results-panel {
+            border: 1px solid #303d36;
+            border-radius: 3px;
+            background: #17231c;
+        }
+
+        .left-rail,
+        .betslip {
+            position: sticky;
+            top: 110px;
+        }
+
+        .panel-title {
+            min-height: 38px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+            padding: 0 12px;
+            border-bottom: 1px solid #303d36;
+            background: #202d25;
+            color: #f5d45f;
+            font-weight: 900;
+            font-size: 0.86rem;
+        }
+
+        .rail-list,
+        .quick-market-list {
+            display: grid;
+            padding: 6px;
+            gap: 2px;
+        }
+
+        .rail-item,
+        .quick-market {
+            min-height: 36px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+            padding: 0 10px;
+            border: 0;
+            border-radius: 2px;
+            background: transparent;
+            color: #cbd4ce;
+            text-align: left;
+            font-size: 0.84rem;
+        }
+
+        .rail-item:hover,
+        .quick-market:hover {
+            background: #243128;
+        }
+
+        .rail-item.is-active {
+            background: #2d3b32;
+            color: #fff;
+        }
+
+        .rail-item small,
+        .quick-market small {
+            color: #7f8e85;
+            font-weight: 800;
+        }
+
+        .market-panel {
+            overflow: hidden;
+        }
+
+        .market-toolbar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            padding: 10px 12px;
+            border-bottom: 1px solid #303d36;
+            background: #131f18;
+        }
+
+        .market-toolbar h2 {
+            margin: 0;
+            font-size: 1rem;
+        }
+
+        .market-toolbar p {
+            margin: 3px 0 0;
+            color: #87938c;
+            font-size: 0.78rem;
+        }
+
+        .filters {
+            border: 1px solid #33423a;
+            background: #202d25;
+            border-radius: 3px;
+        }
+
+        .filter-btn {
+            border-radius: 2px;
+            padding: 7px 10px;
+            font-size: 0.78rem;
+        }
+
+        .filter-btn.is-active {
+            background: #35b768;
+            color: #06110b;
+        }
+
+        .games-grid {
+            display: grid;
+            gap: 0;
+        }
+
+        .game-card {
+            border: 0;
+            border-bottom: 1px solid #303d36;
+            border-radius: 0;
+            background: #17231c;
+            box-shadow: none;
+            animation: cardEnter 220ms ease both;
+        }
+
+        .game-card:hover {
+            border-color: #303d36;
+            background: #1b2921;
+        }
+
+        .game-head {
+            min-height: 36px;
+            padding: 0 10px;
+            background: #202d25;
+            border-bottom: 1px solid #303d36;
+            align-items: center;
+        }
+
+        .game-head b {
+            color: #f5d45f;
+            font-size: 0.82rem;
+        }
+
+        .game-head span {
+            font-size: 0.76rem;
+        }
+
+        .status-pill {
+            border-radius: 2px;
+            padding: 5px 7px;
+            background: #2b3a31;
+            color: #35b768;
+            font-size: 0.68rem;
+        }
+
+        .game-body {
+            padding: 10px;
+            display: grid;
+            grid-template-columns: minmax(190px, 1.2fr) minmax(280px, 1fr) minmax(250px, 0.9fr);
+            gap: 10px;
+            align-items: center;
+        }
+
+        .teams {
+            grid-template-columns: 1fr;
+            gap: 2px;
+        }
+
+        .team {
+            min-height: 30px;
+            display: flex;
+            align-items: center;
+            gap: 9px;
+            text-align: left;
+        }
+
+        .team-logo {
+            width: 26px;
+            height: 26px;
+            margin: 0;
+            padding: 3px;
+            border-radius: 999px;
+        }
+
+        .team strong {
+            font-size: 0.86rem;
+        }
+
+        .vs {
+            display: none;
+        }
+
+        .odds-grid {
+            margin-top: 0;
+            grid-template-columns: repeat(3, minmax(72px, 1fr));
+            gap: 5px;
+        }
+
+        .odd-btn {
+            min-height: 44px;
+            border-radius: 2px;
+            background: #26332b;
+            border-color: #36453c;
+            text-align: center;
+            padding: 5px;
+        }
+
+        .odd-btn:hover:not(:disabled),
+        .odd-btn.is-selected {
+            transform: none;
+            background: #f5d45f;
+            border-color: #f5d45f;
+            color: #111812;
+        }
+
+        .odd-btn span {
+            color: inherit;
+            opacity: 0.72;
+            font-size: 0.66rem;
+        }
+
+        .odd-btn b {
+            margin-top: 2px;
+            color: inherit;
+            font-size: 0.94rem;
+        }
+
+        .bet-panel {
+            grid-template-columns: minmax(0, 1fr) 110px;
+            margin-top: 0;
+            gap: 6px;
+        }
+
+        .field input {
+            height: 36px;
+            border-radius: 2px;
+            background: #101813;
+            border-color: #36453c;
+            font-size: 0.82rem;
+        }
+
+        .payout {
+            min-width: 0;
+            border-radius: 2px;
+            background: #202d25;
+            border-color: #36453c;
+            padding: 5px 8px;
+        }
+
+        .payout span {
+            font-size: 0.62rem;
+        }
+
+        .payout b {
+            color: #f5d45f;
+            font-size: 0.82rem;
+        }
+
+        .limit-note,
+        .inline-error {
+            margin-top: 6px;
+            font-size: 0.72rem;
+            min-height: 15px;
+        }
+
+        .card-action {
+            min-height: 34px;
+            margin-top: 6px;
+            width: 100%;
+        }
+
+        .wager-cell {
+            min-width: 0;
+        }
+
+        .betslip-body {
+            padding: 12px;
+        }
+
+        .betslip-empty {
+            min-height: 156px;
+            display: grid;
+            place-items: center;
+            text-align: center;
+            color: #89968f;
+            border: 1px dashed #3c4a42;
+            border-radius: 3px;
+            padding: 14px;
+            font-size: 0.86rem;
+        }
+
+        .betslip-pick {
+            display: grid;
+            gap: 8px;
+            padding: 10px;
+            border: 1px solid #3a493f;
+            border-radius: 3px;
+            background: #101813;
+            margin-bottom: 10px;
+        }
+
+        .betslip-pick b {
+            color: #fff;
+            font-size: 0.9rem;
+        }
+
+        .betslip-pick span {
+            color: #aab5ae;
+            font-size: 0.78rem;
+        }
+
+        .results-panel {
+            margin-top: 10px;
+            overflow: hidden;
+        }
+
+        .results-list {
+            margin-bottom: 0;
+            gap: 0;
+        }
+
+        .result-card {
+            border: 0;
+            border-bottom: 1px solid #303d36;
+            border-radius: 0;
+            background: transparent;
+            box-shadow: none;
+            padding: 11px 12px;
+        }
+
+        .winner {
+            border-radius: 2px;
+            background: #243128;
+            color: #f5d45f;
+            font-size: 0.78rem;
+        }
+
+        .empty,
+        .error-state,
+        .skeleton {
+            border-color: #303d36;
+            border-radius: 0;
+            background: #17231c;
+        }
+
+        @media (max-width: 1100px) {
+            .market-grid {
+                grid-template-columns: 190px minmax(0, 1fr);
+            }
+
+            .betslip {
+                position: static;
+                grid-column: 1 / -1;
+            }
+
+            .game-body {
+                grid-template-columns: minmax(170px, 1fr) minmax(260px, 1.2fr);
+            }
+
+            .wager-cell {
+                grid-column: 1 / -1;
+            }
+        }
+
+        @media (max-width: 760px) {
+            .sportsbar { top: 72px; }
+            .promo-strip {
+                display: block;
+            }
+
+            .market-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .left-rail,
+            .betslip {
+                position: static;
+            }
+
+            .left-rail {
+                order: 2;
+            }
+
+            .game-body {
+                grid-template-columns: 1fr;
+            }
+
+            .teams {
+                grid-template-columns: 1fr;
+            }
+
+            .odds-grid {
+                grid-template-columns: repeat(3, 1fr);
+            }
+
+            .market-toolbar {
+                display: grid;
+            }
+        }
     </style>
 </head>
 <body>
     <header class="topbar">
         <nav class="shell nav" aria-label="Navegação principal">
             <div class="brand">
-                <div class="brand-mark" aria-hidden="true"><i class="fa-solid fa-shield-halved"></i></div>
+                <div class="brand-mark" aria-hidden="true"><i class="fa-solid fa-futbol"></i></div>
                 <div>
                     <strong>AgroBet</strong>
-                    <span>Apostas esportivas com controle e transparência</span>
+                    <span>Odds ao vivo e apostas esportivas</span>
                 </div>
             </div>
             <div class="nav-actions">
@@ -849,90 +1379,93 @@
         </nav>
     </header>
 
-    <main>
-        <section class="shell hero" aria-labelledby="hero-title">
-            <div class="hero-copy">
-                <h1 id="hero-title">Apostas mais rápidas, claras e confiáveis.</h1>
-                <p>Escolha seus palpites com odds visíveis, limite por jogo, retorno potencial em tempo real e uma navegação pensada para celular e desktop.</p>
-                <div class="hero-actions">
-                    <a class="primary-btn" href="#open-games-section">
-                        <i class="fa-solid fa-bolt"></i>
-                        Ver jogos abertos
-                    </a>
-                    <button id="hero-bets-btn" class="ghost-btn" type="button">
-                        <i class="fa-solid fa-chart-line"></i>
-                        Acompanhar apostas
+    <div class="sportsbar">
+        <div class="shell sportsbar-scroll" role="tablist" aria-label="Esportes">
+            <button class="sport-tab is-active" type="button"><i class="fa-solid fa-futbol"></i> Futebol</button>
+            <button class="sport-tab" type="button"><i class="fa-solid fa-basketball"></i> Basquete</button>
+            <button class="sport-tab" type="button"><i class="fa-solid fa-volleyball"></i> Vôlei</button>
+            <button class="sport-tab" type="button"><i class="fa-solid fa-table-tennis-paddle-ball"></i> Tênis</button>
+            <button class="sport-tab" type="button"><i class="fa-solid fa-star"></i> Destaques</button>
+            <button class="sport-tab" type="button"><i class="fa-solid fa-clock"></i> Ao vivo</button>
+        </div>
+    </div>
+
+    <main class="shell sportsbook">
+        <section class="promo-strip" aria-labelledby="hero-title">
+            <div>
+                <h1 id="hero-title">AgroBet Sports</h1>
+                <p>Mercados organizados, odds rápidas e bilhete sempre à vista.</p>
+            </div>
+            <button id="hero-bets-btn" class="ghost-btn" type="button">
+                <i class="fa-solid fa-receipt"></i>
+                Minhas apostas
+            </button>
+        </section>
+
+        <div class="market-grid">
+            <aside class="left-rail" aria-label="Menu de mercados">
+                <div class="panel-title">
+                    <span>Esportes</span>
+                    <i class="fa-solid fa-bars-staggered"></i>
+                </div>
+                <div class="rail-list">
+                    <button class="rail-item is-active" type="button"><span><i class="fa-solid fa-futbol"></i> Futebol</span><small id="metric-games">--</small></button>
+                    <button class="rail-item" type="button"><span><i class="fa-solid fa-fire"></i> Populares</span><small>12</small></button>
+                    <button class="rail-item" type="button"><span><i class="fa-solid fa-trophy"></i> Competições</span><small>8</small></button>
+                    <button class="rail-item" type="button"><span><i class="fa-solid fa-calendar-days"></i> Hoje</span><small>24</small></button>
+                    <button class="rail-item" type="button"><span><i class="fa-solid fa-chart-line"></i> Odds dinâmicas</span><small>ON</small></button>
+                </div>
+
+                <div class="panel-title">
+                    <span>Mercados rápidos</span>
+                </div>
+                <div class="quick-market-list">
+                    <button class="quick-market" type="button"><span>Resultado final</span><small>1X2</small></button>
+                    <button class="quick-market" type="button"><span>Empate</span><small>X</small></button>
+                    <button class="quick-market" type="button"><span>Mandante</span><small>1</small></button>
+                    <button class="quick-market" type="button"><span>Visitante</span><small>2</small></button>
+                </div>
+            </aside>
+
+            <section id="open-games-section" class="market-panel" aria-labelledby="games-title">
+                <div class="market-toolbar">
+                    <div>
+                        <h2 id="games-title">Futebol - Resultado da partida</h2>
+                        <p>Casa, empate ou visitante. Escolha uma odd e confirme pelo bilhete.</p>
+                    </div>
+                    <div class="filters" role="group" aria-label="Filtros de jogos">
+                        <button class="filter-btn is-active" type="button" data-filter="all">Todos</button>
+                        <button class="filter-btn" type="button" data-filter="available">Disponíveis</button>
+                        <button class="filter-btn" type="button" data-filter="limited">No limite</button>
+                    </div>
+                </div>
+                <div id="games-container" class="games-grid" aria-live="polite"></div>
+
+                <section id="results-section" class="results-panel" aria-labelledby="results-title">
+                    <div class="panel-title">
+                        <span id="results-title">Resultados anteriores</span>
+                        <i class="fa-solid fa-square-poll-vertical"></i>
+                    </div>
+                    <div id="results-container" class="results-list" aria-live="polite"></div>
+                </section>
+            </section>
+
+            <aside class="betslip" aria-label="Bilhete de apostas">
+                <div class="panel-title">
+                    <span>Bilhete de apostas</span>
+                    <small><span id="metric-bets">--</span> confirmadas</small>
+                </div>
+                <div class="betslip-body">
+                    <div id="betslip-preview" class="betslip-empty">
+                        Selecione uma odd na lista de jogos para montar seu bilhete.
+                    </div>
+                    <button id="betslip-my-bets-btn" class="ghost-btn card-action" type="button">
+                        <i class="fa-solid fa-clock-rotate-left"></i>
+                        Histórico de apostas
                     </button>
                 </div>
-                <div class="trust-row" aria-label="Resumo da plataforma">
-                    <div class="metric">
-                        <b id="metric-games">--</b>
-                        <span>jogos disponíveis</span>
-                    </div>
-                    <div class="metric">
-                        <b id="metric-bets">--</b>
-                        <span>apostas confirmadas</span>
-                    </div>
-                    <div class="metric">
-                        <b>PIX</b>
-                        <span>pagamento simples e rastreável</span>
-                    </div>
-                </div>
-            </div>
-
-            <div class="match-stage" aria-hidden="true">
-                <div class="pitch"></div>
-                <div class="ticker">
-                    <span>Odds dinâmicas</span>
-                    <span>Limite por partida</span>
-                    <span>Retorno imediato</span>
-                </div>
-                <div class="live-ticket">
-                    <div class="ticket-top">
-                        <span>Bilhete em destaque</span>
-                        <b>Retorno potencial</b>
-                    </div>
-                    <div class="ticket-row">
-                        <div class="team-mini">
-                            <i class="fa-solid fa-house-flag"></i>
-                            <b>Casa</b>
-                            <span>1.85</span>
-                        </div>
-                        <div class="vs-mini">VS</div>
-                        <div class="team-mini">
-                            <i class="fa-solid fa-plane-arrival"></i>
-                            <b>Visitante</b>
-                            <span>2.20</span>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </section>
-
-        <section id="open-games-section" class="shell" aria-labelledby="games-title">
-            <div class="section-head">
-                <div>
-                    <h2 id="games-title">Jogos abertos</h2>
-                    <p>Selecione uma odd, informe o valor e veja o retorno antes de confirmar.</p>
-                </div>
-                <div class="filters" role="group" aria-label="Filtros de jogos">
-                    <button class="filter-btn is-active" type="button" data-filter="all">Todos</button>
-                    <button class="filter-btn" type="button" data-filter="available">Disponíveis</button>
-                    <button class="filter-btn" type="button" data-filter="limited">No limite</button>
-                </div>
-            </div>
-            <div id="games-container" class="games-grid" aria-live="polite"></div>
-        </section>
-
-        <section id="results-section" class="shell" aria-labelledby="results-title">
-            <div class="section-head">
-                <div>
-                    <h2 id="results-title">Resultados anteriores</h2>
-                    <p>Histórico de partidas finalizadas e resultados declarados.</p>
-                </div>
-            </div>
-            <div id="results-container" class="results-list" aria-live="polite"></div>
-        </section>
+            </aside>
+        </div>
     </main>
 
     <div id="login-modal" class="modal" role="dialog" aria-modal="true" aria-labelledby="login-title">
@@ -1025,6 +1558,7 @@
             myBetsList: document.getElementById('my-bets-list'),
             metricGames: document.getElementById('metric-games'),
             metricBets: document.getElementById('metric-bets'),
+            betslipPreview: document.getElementById('betslip-preview'),
             toast: document.getElementById('toast')
         };
 
@@ -1185,21 +1719,23 @@
                             ${renderOddButton('empate', 'Empate', game.odds?.draw, disabled)}
                             ${renderOddButton('away', awayName, game.odds?.away, disabled)}
                         </div>
-                        <div class="bet-panel">
-                            <div class="field">
-                                <input class="bet-value-input" type="number" min="1" max="${remaining.toFixed(2)}" step="0.01" inputmode="decimal" placeholder="Valor da aposta" ${disabled ? 'disabled' : ''}>
+                        <div class="wager-cell">
+                            <div class="bet-panel">
+                                <div class="field">
+                                    <input class="bet-value-input" type="number" min="1" max="${remaining.toFixed(2)}" step="0.01" inputmode="decimal" placeholder="Valor da aposta" ${disabled ? 'disabled' : ''}>
+                                </div>
+                                <div class="payout">
+                                    <span>Retorno</span>
+                                    <b class="potential-payout">${formatMoney(0)}</b>
+                                </div>
                             </div>
-                            <div class="payout">
-                                <span>Retorno</span>
-                                <b class="potential-payout">${formatMoney(0)}</b>
-                            </div>
+                            <p class="limit-note">${disabled ? `Limite de ${formatMoney(maxBet)} atingido para esta partida.` : limitMessage}</p>
+                            <p class="inline-error bet-error" role="alert"></p>
+                            <button class="primary-btn card-action confirm-btn" type="button" ${disabled ? 'disabled' : ''}>
+                                <i class="fa-solid fa-lock"></i>
+                                ${disabled ? 'Limite atingido' : 'Apostar'}
+                            </button>
                         </div>
-                        <p class="limit-note">${disabled ? `Limite de ${formatMoney(maxBet)} atingido para esta partida.` : limitMessage}</p>
-                        <p class="inline-error bet-error" role="alert"></p>
-                        <button class="primary-btn card-action confirm-btn" type="button" ${disabled ? 'disabled' : ''}>
-                            <i class="fa-solid fa-lock"></i>
-                            ${disabled ? 'Limite atingido' : 'Confirmar aposta'}
-                        </button>
                     </div>
                 </article>`;
         }
@@ -1260,6 +1796,7 @@
                     payoutEl.textContent = formatMoney(value * selectedOdd);
                     errorEl.textContent = '';
                     confirmBtn.disabled = !(selectedOption && value > 0);
+                    updateBetslipPreview(card, selectedOption, selectedOdd, value);
                 }
 
                 confirmBtn?.addEventListener('click', () => {
@@ -1289,6 +1826,23 @@
 
                 updatePayout();
             });
+        }
+
+        function updateBetslipPreview(card, option, odd, value) {
+            if (!elements.betslipPreview || !option) return;
+
+            const teams = [...card.querySelectorAll('.team strong')].map(item => item.textContent.trim());
+            const labels = { home: teams[0] || 'Casa', empate: 'Empate', away: teams[1] || 'Visitante' };
+            const payout = value > 0 ? value * odd : 0;
+
+            elements.betslipPreview.className = 'betslip-pick';
+            elements.betslipPreview.innerHTML = `
+                <b>${escapeHTML(labels[option])}</b>
+                <span>${escapeHTML(teams.join(' vs ') || 'Partida selecionada')}</span>
+                <span>Odd <b>${Number(odd || 0).toFixed(2)}</b></span>
+                <span>Valor: <b>${formatMoney(value)}</b></span>
+                <span>Retorno potencial: <b>${formatMoney(payout)}</b></span>
+            `;
         }
 
         async function handleBet(gameId, option, value, card) {
@@ -1440,6 +1994,7 @@
             document.getElementById('close-login').addEventListener('click', () => setModal(elements.loginModal, false));
             document.getElementById('my-bets-btn').addEventListener('click', displayMyBets);
             document.getElementById('hero-bets-btn').addEventListener('click', displayMyBets);
+            document.getElementById('betslip-my-bets-btn').addEventListener('click', displayMyBets);
             document.getElementById('close-my-bets').addEventListener('click', () => setModal(elements.myBetsModal, false));
 
             document.querySelectorAll('.filter-btn').forEach(button => {
