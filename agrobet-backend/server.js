@@ -84,6 +84,20 @@ const preference = new Preference(client);
 const payment = new Payment(client);
 
 const VALID_BET_OPTIONS = new Set(['home', 'away', 'empate']);
+const OUTCOMES = ['home', 'draw', 'away'];
+const ODDS_POLICY = {
+    houseMargin: Number(process.env.ODDS_HOUSE_MARGIN || 0.30),
+    minOdd: Number(process.env.ODDS_MIN || 1.03),
+    maxOdd: Number(process.env.ODDS_MAX || 2.60),
+    startingPool: Number(process.env.ODDS_STARTING_POOL || 20),
+    maturityPool: Number(process.env.ODDS_MATURITY_POOL || 160),
+    highConcentrationShare: Number(process.env.ODDS_HIGH_CONCENTRATION_SHARE || 0.62),
+    hardConcentrationShare: Number(process.env.ODDS_HARD_CONCENTRATION_SHARE || 0.72),
+    marketStakeMultiplier: Number(process.env.RISK_MARKET_STAKE_MULTIPLIER || 8),
+    outcomeStakeMultiplier: Number(process.env.RISK_OUTCOME_STAKE_MULTIPLIER || 4),
+    liabilityPoolMultiplier: Number(process.env.RISK_LIABILITY_POOL_MULTIPLIER || 1.08),
+    startingLiabilityMultiplier: Number(process.env.RISK_STARTING_LIABILITY_MULTIPLIER || 2.80)
+};
 
 function cleanText(value, maxLength = 140) {
     return String(value || '').trim().replace(/\s+/g, ' ').slice(0, maxLength);
@@ -93,6 +107,113 @@ function toMoney(value) {
     const numericValue = Number(value);
     if (!Number.isFinite(numericValue)) return null;
     return Math.round(numericValue * 100) / 100;
+}
+
+function clamp(value, min, max) {
+    return Math.min(max, Math.max(min, value));
+}
+
+function optionToOutcome(option) {
+    return option === 'empate' ? 'draw' : option;
+}
+
+function betChoiceToOutcome(betChoice, game) {
+    if (betChoice === 'Empate') return 'draw';
+    if (betChoice === game.home.name) return 'home';
+    if (betChoice === game.away.name) return 'away';
+    return null;
+}
+
+function getMarketSnapshot(game, bets) {
+    const stakes = { home: 0, draw: 0, away: 0 };
+    const liabilities = { home: 0, draw: 0, away: 0 };
+
+    bets.forEach(bet => {
+        const outcome = betChoiceToOutcome(bet.betChoice, game);
+        if (!outcome) return;
+        stakes[outcome] += Number(bet.betValue || 0);
+        liabilities[outcome] += Number(bet.potentialPayout || 0);
+    });
+
+    const totalStake = OUTCOMES.reduce((sum, outcome) => sum + stakes[outcome], 0);
+    return { stakes, liabilities, totalStake };
+}
+
+function normalizedInitialProbabilities(initialOdds) {
+    const implied = {
+        home: 1 / Math.max(Number(initialOdds?.home || 2), 1.01),
+        draw: 1 / Math.max(Number(initialOdds?.draw || 3), 1.01),
+        away: 1 / Math.max(Number(initialOdds?.away || 2), 1.01)
+    };
+    const total = OUTCOMES.reduce((sum, outcome) => sum + implied[outcome], 0);
+    return {
+        home: implied.home / total,
+        draw: implied.draw / total,
+        away: implied.away / total
+    };
+}
+
+function calculateManagedOdds(game, bets) {
+    const { stakes, totalStake } = getMarketSnapshot(game, bets);
+    const baseProbability = normalizedInitialProbabilities(game.initialOdds || game.odds);
+    const moneyWeight = totalStake < ODDS_POLICY.startingPool
+        ? 0
+        : clamp((totalStake - ODDS_POLICY.startingPool) / ODDS_POLICY.maturityPool, 0, 0.75);
+
+    const liquiditySeed = Math.max(Number(game.maxBetValue || 35) * 0.75, 20);
+    const seededPool = totalStake + (liquiditySeed * OUTCOMES.length);
+    const odds = {};
+
+    OUTCOMES.forEach(outcome => {
+        const moneyPressure = (stakes[outcome] + liquiditySeed) / seededPool;
+        const probability = (baseProbability[outcome] * (1 - moneyWeight)) + (moneyPressure * moneyWeight);
+        const outcomeShare = totalStake > 0 ? stakes[outcome] / totalStake : 0;
+        let maxOdd = ODDS_POLICY.maxOdd;
+
+        if (outcomeShare >= ODDS_POLICY.hardConcentrationShare) {
+            maxOdd = Math.min(maxOdd, 1.28);
+        } else if (outcomeShare >= ODDS_POLICY.highConcentrationShare) {
+            maxOdd = Math.min(maxOdd, 1.45);
+        }
+
+        odds[outcome] = toMoney(clamp((1 - ODDS_POLICY.houseMargin) / probability, ODDS_POLICY.minOdd, maxOdd));
+    });
+
+    return odds;
+}
+
+function assessBetRisk(game, approvedBets, option, value, odds) {
+    const outcome = optionToOutcome(option);
+    const snapshot = getMarketSnapshot(game, approvedBets);
+    const projectedStake = snapshot.stakes[outcome] + value;
+    const projectedTotalStake = snapshot.totalStake + value;
+    const projectedShare = projectedTotalStake > 0 ? projectedStake / projectedTotalStake : 0;
+    const projectedLiability = snapshot.liabilities[outcome] + (value * odds);
+    const maxBetValue = Number(game.maxBetValue || 35);
+    const maxMarketStake = maxBetValue * ODDS_POLICY.marketStakeMultiplier;
+    const maxOutcomeStake = maxBetValue * ODDS_POLICY.outcomeStakeMultiplier;
+    const liabilityBudget = Math.max(
+        maxBetValue * ODDS_POLICY.startingLiabilityMultiplier,
+        projectedTotalStake * ODDS_POLICY.liabilityPoolMultiplier
+    );
+
+    if (projectedTotalStake > maxMarketStake) {
+        return { ok: false, message: 'Mercado temporariamente limitado: o volume total deste jogo já atingiu o limite de segurança.' };
+    }
+
+    if (projectedStake > maxOutcomeStake) {
+        return { ok: false, message: 'Mercado temporariamente limitado: já entrou muito dinheiro nesse palpite.' };
+    }
+
+    if (projectedTotalStake >= maxBetValue * 2 && projectedShare >= ODDS_POLICY.hardConcentrationShare) {
+        return { ok: false, message: 'Mercado temporariamente limitado: concentração muito alta em um dos lados.' };
+    }
+
+    if (projectedLiability > liabilityBudget) {
+        return { ok: false, message: 'Mercado temporariamente limitado: exposição máxima da casa atingida para este resultado.' };
+    }
+
+    return { ok: true };
 }
 
 function escapeHtml(value) {
@@ -120,64 +241,26 @@ const authAdmin = (req, res, next) => {
 // --- Função para Odds Dinâmicas (LÓGICA AJUSTADA) ---
 async function updateOdds(gameId) {
     try {
-        const VIG = 0.20; // Margem de 20% para a casa
-        const PAYOUT_RATE = 1 - VIG;
-        const MIN_ODD = 1.01;
-        const MAX_ODD = 4.50; // Teto de segurança para as odds
-        const STARTING_POOL = 35; // Começa a ajustar as odds a partir de R$ 35
-        const MATURITY_POOL = 120; // Aos R$ 120, o peso do dinheiro é maior
-
         const game = await Game.findById(gameId);
         if (!game || game.status !== 'aberto' || !game.initialOdds) return;
 
-        const bets = await Bet.find({ gameId: gameId, status: 'approved' });
-
-        let totalBetHome = 0;
-        let totalBetAway = 0;
-        let totalBetDraw = 0;
-
-        bets.forEach(bet => {
-            if (bet.betChoice === game.home.name) totalBetHome += bet.betValue;
-            else if (bet.betChoice === game.away.name) totalBetAway += bet.betValue;
-            else if (bet.betChoice === 'Empate') totalBetDraw += bet.betValue;
-        });
-
-        const totalPool = totalBetHome + totalBetAway + totalBetDraw;
-        
-        // Apenas começa a ajustar após o valor inicial definido
-        if (totalPool < STARTING_POOL) return; 
-
-        const poolBasedOddHome = (totalPool * PAYOUT_RATE) / (totalBetHome || 1);
-        const poolBasedOddAway = (totalPool * PAYOUT_RATE) / (totalBetAway || 1);
-        const poolBasedOddDraw = (totalPool * PAYOUT_RATE) / (totalBetDraw || 1);
-
-        const initialOddsWeight = Math.max(0, 1 - (totalPool / MATURITY_POOL));
-
-        const calculatedOddHome = (poolBasedOddHome * (1 - initialOddsWeight)) + (game.initialOdds.home * initialOddsWeight);
-        const calculatedOddAway = (poolBasedOddAway * (1 - initialOddsWeight)) + (game.initialOdds.away * initialOddsWeight);
-        const calculatedOddDraw = (poolBasedOddDraw * (1 - initialOddsWeight)) + (game.initialOdds.draw * initialOddsWeight);
-        
-        // Aplica o teto de segurança (MAX_ODD) e o piso (MIN_ODD)
-        const newOddHome = Math.min(MAX_ODD, Math.max(MIN_ODD, calculatedOddHome));
-        const newOddAway = Math.min(MAX_ODD, Math.max(MIN_ODD, calculatedOddAway));
-        const newOddDraw = Math.min(MAX_ODD, Math.max(MIN_ODD, calculatedOddDraw));
-
+        const bets = await Bet.find({ gameId: gameId, status: 'approved' }).lean();
+        const newOdds = calculateManagedOdds(game, bets);
 
         await Game.findByIdAndUpdate(gameId, {
             $set: {
-                'odds.home': newOddHome,
-                'odds.away': newOddAway,
-                'odds.draw': newOddDraw,
+                'odds.home': newOdds.home,
+                'odds.away': newOdds.away,
+                'odds.draw': newOdds.draw,
             }
         });
 
-        console.log(`Odds atualizadas para o jogo ${game._id}: C:${newOddHome.toFixed(2)}, E:${newOddDraw.toFixed(2)}, V:${newOddAway.toFixed(2)}`);
+        console.log(`Odds atualizadas para o jogo ${game._id}: C:${newOdds.home.toFixed(2)}, E:${newOdds.draw.toFixed(2)}, V:${newOdds.away.toFixed(2)}`);
 
     } catch (error) {
         console.error(`Erro ao atualizar odds para o jogo ${gameId}:`, error);
     }
 }
-
 
 // --- ROTAS PÚBLICAS (para o site principal) ---
 app.get('/', (req, res) => res.send('<h1>Servidor do AgroBet está no ar!</h1>'));
@@ -251,7 +334,8 @@ app.post('/criar-pagamento', async (req, res) => {
             return res.status(400).json({ message: 'Este jogo não está mais aberto para apostas.' });
         }
         
-        const userBetsOnGame = await Bet.find({ gameId: gameId, 'user.pix': registeredUser.pix, status: 'approved' }).lean();
+        const approvedBetsForGame = await Bet.find({ gameId: gameId, status: 'approved' }).lean();
+        const userBetsOnGame = approvedBetsForGame.filter(bet => bet.user?.pix === registeredUser.pix);
         const totalBetByUser = userBetsOnGame.reduce((acc, bet) => acc + Number(bet.betValue || 0), 0);
 
         if ((totalBetByUser + value) > game.maxBetValue) {
@@ -264,11 +348,24 @@ app.post('/criar-pagamento', async (req, res) => {
 
 
         const oddsKey = option === 'empate' ? 'draw' : option;
-        const odds = Number(game.odds[oddsKey]);
+        const managedOdds = calculateManagedOdds(game, approvedBetsForGame);
+        const odds = Number(managedOdds[oddsKey]);
         if (!Number.isFinite(odds) || odds <= 0) {
             return res.status(400).json({ message: 'Odd inválida para este jogo.' });
         }
+        await Game.findByIdAndUpdate(gameId, {
+            $set: {
+                'odds.home': managedOdds.home,
+                'odds.away': managedOdds.away,
+                'odds.draw': managedOdds.draw,
+            }
+        });
         const potentialPayout = toMoney(value * odds);
+        const risk = assessBetRisk(game, approvedBetsForGame, option, value, odds);
+        if (!risk.ok) {
+            await updateOdds(gameId);
+            return res.status(400).json({ message: risk.message });
+        }
         const betChoiceText = option === 'empate' ? 'Empate' : game[option].name;
         
         const redirectUrl = process.env.SUCCESS_REDIRECT_URL || allowedOrigins[0] || req.get('origin');
@@ -780,6 +877,9 @@ app.post('/admin/edit-game/:id', authAdmin, async(req, res) => {
                 'odds.home': oddsHome,
                 'odds.draw': oddsDraw,
                 'odds.away': oddsAway,
+                'initialOdds.home': oddsHome,
+                'initialOdds.draw': oddsDraw,
+                'initialOdds.away': oddsAway,
                 'maxBetValue': maxBetValue
             }
         });
