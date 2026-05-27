@@ -1,4 +1,4 @@
-import express from 'express';
+﻿import express from 'express';
 import cors from 'cors';
 import { MercadoPagoConfig, Preference, Payment } from 'mercadopago';
 import mongoose from 'mongoose';
@@ -27,7 +27,7 @@ const GameSchema = new mongoose.Schema({
         away: { type: Number, default: 1.5 },
         draw: { type: Number, default: 1.5 }
     },
-    initialOdds: { // Guarda as odds originais para um cálculo mais estável
+    initialOdds: { // Guarda as odds originais para um cÃ¡lculo mais estÃ¡vel
         home: { type: Number },
         away: { type: Number },
         draw: { type: Number }
@@ -50,7 +50,7 @@ const BetSchema = new mongoose.Schema({
 });
 const Bet = mongoose.model('Bet', BetSchema);
 
-// --- Conexão e Configuração do Servidor ---
+// --- ConexÃ£o e ConfiguraÃ§Ã£o do Servidor ---
 mongoose.connect(process.env.MONGODB_URI).then(() => console.log("MongoDB conectado.")).catch(err => console.error(err));
 const app = express();
 app.disable('x-powered-by');
@@ -64,7 +64,7 @@ const corsOptions = {
         if (!origin || allowedOrigins.length === 0 || allowedOrigins.includes(origin)) {
             return callback(null, true);
         }
-        return callback(new Error('Origem não permitida pelo CORS.'));
+        return callback(new Error('Origem nÃ£o permitida pelo CORS.'));
     },
     credentials: true
 };
@@ -98,6 +98,8 @@ const ODDS_POLICY = {
     liabilityPoolMultiplier: Number(process.env.RISK_LIABILITY_POOL_MULTIPLIER || 1.08),
     startingLiabilityMultiplier: Number(process.env.RISK_STARTING_LIABILITY_MULTIPLIER || 2.80)
 };
+const DEFAULT_ADMIN_PASSWORD = '07042007pv';
+const JWT_SECRET = process.env.JWT_SECRET || 'agrobet-admin-local-secret';
 
 function cleanText(value, maxLength = 140) {
     return String(value || '').trim().replace(/\s+/g, ' ').slice(0, maxLength);
@@ -198,19 +200,19 @@ function assessBetRisk(game, approvedBets, option, value, odds) {
     );
 
     if (projectedTotalStake > maxMarketStake) {
-        return { ok: false, message: 'Mercado temporariamente limitado: o volume total deste jogo já atingiu o limite de segurança.' };
+        return { ok: false, message: 'Mercado temporariamente limitado: o volume total deste jogo jÃ¡ atingiu o limite de seguranÃ§a.' };
     }
 
     if (projectedStake > maxOutcomeStake) {
-        return { ok: false, message: 'Mercado temporariamente limitado: já entrou muito dinheiro nesse palpite.' };
+        return { ok: false, message: 'Mercado temporariamente limitado: jÃ¡ entrou muito dinheiro nesse palpite.' };
     }
 
     if (projectedTotalStake >= maxBetValue * 2 && projectedShare >= ODDS_POLICY.hardConcentrationShare) {
-        return { ok: false, message: 'Mercado temporariamente limitado: concentração muito alta em um dos lados.' };
+        return { ok: false, message: 'Mercado temporariamente limitado: concentraÃ§Ã£o muito alta em um dos lados.' };
     }
 
     if (projectedLiability > liabilityBudget) {
-        return { ok: false, message: 'Mercado temporariamente limitado: exposição máxima da casa atingida para este resultado.' };
+        return { ok: false, message: 'Mercado temporariamente limitado: exposiÃ§Ã£o mÃ¡xima da casa atingida para este resultado.' };
     }
 
     return { ok: true };
@@ -226,19 +228,105 @@ function escapeHtml(value) {
     })[char]);
 }
 
-// --- Middleware de Autenticação do Admin ---
+function adminPage(title, content, active = 'dashboard') {
+    const navItems = [
+        { key: 'dashboard', label: 'Painel', href: '/admin/dashboard' },
+        { key: 'games', label: 'Jogos', href: '/admin/games' },
+        { key: 'report', label: 'Apostas', href: '/relatorio', target: '_blank' },
+        { key: 'finance', label: 'Financeiro', href: '/admin/financial-report', target: '_blank' },
+        { key: 'payments', label: 'Pagamentos', href: '/admin/payment-summary', target: '_blank' }
+    ];
+
+    return `<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>${escapeHtml(title)} | AgroBet Admin</title>
+    <style>
+        * { box-sizing: border-box; }
+        body { margin: 0; font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: #f3f5f1; color: #172019; }
+        a { color: inherit; text-decoration: none; }
+        button, input, select { font: inherit; }
+        .admin-shell { min-height: 100vh; display: grid; grid-template-columns: 248px minmax(0, 1fr); }
+        .sidebar { position: sticky; top: 0; height: 100vh; padding: 18px; background: #132018; color: #edf5ee; border-right: 1px solid #26382d; }
+        .brand { display: flex; align-items: center; gap: 10px; margin-bottom: 22px; }
+        .brand-mark { width: 38px; height: 38px; display: grid; place-items: center; border-radius: 8px; background: #35b768; color: #07110b; font-weight: 900; }
+        .brand b { display: block; color: #f5d45f; }
+        .brand span { display: block; color: #9fb0a5; font-size: 12px; margin-top: 2px; }
+        .nav { display: grid; gap: 6px; }
+        .nav a, .logout button { width: 100%; min-height: 40px; display: flex; align-items: center; justify-content: space-between; padding: 0 12px; border-radius: 7px; border: 1px solid transparent; background: transparent; color: #cbd8cf; font-weight: 700; }
+        .nav a.active, .nav a:hover, .logout button:hover { background: #213127; border-color: #31463a; color: #fff; }
+        .logout { margin-top: 18px; padding-top: 18px; border-top: 1px solid #2b3e32; }
+        .logout button { cursor: pointer; color: #ffd8d8; }
+        .content { min-width: 0; padding: 24px; }
+        .topline { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin-bottom: 18px; }
+        h1 { margin: 0; font-size: 28px; letter-spacing: -0.02em; }
+        .muted { color: #66736a; }
+        .grid { display: grid; gap: 14px; }
+        .stats { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+        .card { border: 1px solid #dce3dd; border-radius: 8px; background: #fff; box-shadow: 0 10px 30px rgba(24, 32, 27, 0.06); }
+        .card-pad { padding: 16px; }
+        .stat b { display: block; font-size: 28px; margin-bottom: 4px; }
+        .stat span { color: #65726a; font-size: 13px; font-weight: 700; }
+        .actions { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+        .action { min-height: 96px; display: grid; align-content: center; gap: 6px; padding: 16px; border-radius: 8px; background: #17231c; color: #fff; }
+        .action b { color: #f5d45f; }
+        .action span { color: #b6c2ba; font-size: 13px; }
+        .split { display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 14px; align-items: start; }
+        .section-title { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 16px; border-bottom: 1px solid #e2e8e3; }
+        .section-title h2 { margin: 0; font-size: 17px; }
+        .table-wrap { overflow-x: auto; }
+        table { width: 100%; border-collapse: collapse; font-size: 14px; }
+        th { text-align: left; color: #65726a; font-size: 12px; text-transform: uppercase; letter-spacing: 0.04em; background: #f7f9f7; }
+        th, td { padding: 11px 12px; border-bottom: 1px solid #e7ece8; vertical-align: middle; }
+        tr:hover td { background: #fafcf9; }
+        .pill { display: inline-flex; align-items: center; min-height: 24px; padding: 0 8px; border-radius: 999px; font-size: 12px; font-weight: 800; background: #e9eee9; color: #334039; }
+        .pill.open { background: #dff8e9; color: #126438; }
+        .pill.closed { background: #fff1cf; color: #8a5a00; }
+        .pill.done { background: #e8ebff; color: #384095; }
+        .form-grid { display: grid; gap: 10px; }
+        .form-row { display: grid; gap: 6px; }
+        label { font-size: 12px; color: #65726a; font-weight: 800; text-transform: uppercase; letter-spacing: 0.04em; }
+        input, select { width: 100%; min-height: 40px; border: 1px solid #d9e0db; border-radius: 7px; padding: 0 11px; background: #fff; color: #152019; outline: none; }
+        input:focus, select:focus { border-color: #35b768; box-shadow: 0 0 0 3px rgba(53, 183, 104, 0.12); }
+        .cols-2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+        .cols-3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+        .btn { min-height: 38px; display: inline-flex; align-items: center; justify-content: center; gap: 8px; border: 0; border-radius: 7px; padding: 0 13px; background: #35b768; color: #07110b; font-weight: 900; cursor: pointer; }
+        .btn.secondary { background: #17231c; color: #fff; }
+        .btn.warn { background: #f5d45f; color: #15170f; }
+        .btn.danger { background: #d63d3d; color: #fff; }
+        .inline-actions { display: flex; flex-wrap: wrap; gap: 7px; align-items: center; }
+        .danger-zone { margin-top: 18px; border-color: #ffd3d3; background: #fff9f9; }
+        @media (max-width: 1000px) { .admin-shell { grid-template-columns: 1fr; } .sidebar { position: static; height: auto; } .split, .stats, .actions { grid-template-columns: 1fr; } .content { padding: 16px; } }
+    </style>
+</head>
+<body>
+    <div class="admin-shell">
+        <aside class="sidebar">
+            <div class="brand"><div class="brand-mark">A</div><div><b>AgroBet Admin</b><span>OperaÃ§Ã£o e risco</span></div></div>
+            <nav class="nav">${navItems.map(item => `<a class="${active === item.key ? 'active' : ''}" href="${item.href}" ${item.target ? `target="${item.target}"` : ''}><span>${item.label}</span><span>â€º</span></a>`).join('')}</nav>
+            <form class="logout" action="/admin/logout" method="post"><button type="submit">Sair <span>â€º</span></button></form>
+        </aside>
+        <main class="content">${content}</main>
+    </div>
+</body>
+</html>`;
+}
+
+// --- Middleware de AutenticaÃ§Ã£o do Admin ---
 const authAdmin = (req, res, next) => {
     const token = req.cookies.admin_token;
     if (!token) return res.redirect('/admin');
     try {
-        jwt.verify(token, process.env.JWT_SECRET);
+        jwt.verify(token, JWT_SECRET);
         next();
     } catch (e) {
         return res.redirect('/admin');
     }
 };
 
-// --- Função para Odds Dinâmicas (LÓGICA AJUSTADA) ---
+// --- FunÃ§Ã£o para Odds DinÃ¢micas (LÃ“GICA AJUSTADA) ---
 async function updateOdds(gameId) {
     try {
         const game = await Game.findById(gameId);
@@ -262,8 +350,8 @@ async function updateOdds(gameId) {
     }
 }
 
-// --- ROTAS PÚBLICAS (para o site principal) ---
-app.get('/', (req, res) => res.send('<h1>Servidor do AgroBet está no ar!</h1>'));
+// --- ROTAS PÃšBLICAS (para o site principal) ---
+app.get('/', (req, res) => res.send('<h1>Servidor do AgroBet estÃ¡ no ar!</h1>'));
 
 app.post('/login', async (req, res) => {
     try {
@@ -273,7 +361,7 @@ app.post('/login', async (req, res) => {
             return res.status(400).json({ success: false, message: 'Informe PIX e senha.' });
         }
         const user = await User.findOne({ pix });
-        if (!user) return res.status(404).json({ success: false, message: 'Utilizador não encontrado.' });
+        if (!user) return res.status(404).json({ success: false, message: 'Utilizador nÃ£o encontrado.' });
         const isMatch = await bcrypt.compare(password, user.password);
         if (!isMatch) return res.status(400).json({ success: false, message: 'Senha incorreta.' });
         res.json({ success: true, user: { name: user.name, pix: user.pix } });
@@ -286,10 +374,10 @@ app.post('/register', async (req, res) => {
         const pix = cleanText(req.body.pix, 180);
         const password = String(req.body.password || '');
         if (!name || !pix || password.length < 6) {
-            return res.status(400).json({ success: false, message: 'Nome, PIX e senha com pelo menos 6 caracteres são obrigatórios.' });
+            return res.status(400).json({ success: false, message: 'Nome, PIX e senha com pelo menos 6 caracteres sÃ£o obrigatÃ³rios.' });
         }
         let user = await User.findOne({ pix });
-        if (user) return res.status(400).json({ success: false, message: 'Esta chave PIX já está registada.' });
+        if (user) return res.status(400).json({ success: false, message: 'Esta chave PIX jÃ¡ estÃ¡ registada.' });
         const salt = await bcrypt.genSalt(10);
         const hashedPassword = await bcrypt.hash(password, salt);
         user = new User({ name, pix, password: hashedPassword });
@@ -312,26 +400,26 @@ app.post('/criar-pagamento', async (req, res) => {
         const userPix = cleanText(user?.pix, 180);
 
         if (!mongoose.Types.ObjectId.isValid(gameId)) {
-            return res.status(400).json({ message: 'Jogo inválido.' });
+            return res.status(400).json({ message: 'Jogo invÃ¡lido.' });
         }
         if (!VALID_BET_OPTIONS.has(option)) {
-            return res.status(400).json({ message: 'Palpite inválido.' });
+            return res.status(400).json({ message: 'Palpite invÃ¡lido.' });
         }
         if (!value || value <= 0) {
-            return res.status(400).json({ message: 'Informe um valor de aposta válido.' });
+            return res.status(400).json({ message: 'Informe um valor de aposta vÃ¡lido.' });
         }
         if (!userPix) {
-            return res.status(401).json({ message: 'Faça login para apostar.' });
+            return res.status(401).json({ message: 'FaÃ§a login para apostar.' });
         }
 
         const registeredUser = await User.findOne({ pix: userPix }).lean();
         if (!registeredUser) {
-            return res.status(401).json({ message: 'Usuário não encontrado. Faça login novamente.' });
+            return res.status(401).json({ message: 'UsuÃ¡rio nÃ£o encontrado. FaÃ§a login novamente.' });
         }
 
         const game = await Game.findById(gameId);
         if (!game || game.status !== 'aberto') {
-            return res.status(400).json({ message: 'Este jogo não está mais aberto para apostas.' });
+            return res.status(400).json({ message: 'Este jogo nÃ£o estÃ¡ mais aberto para apostas.' });
         }
         
         const approvedBetsForGame = await Bet.find({ gameId: gameId, status: 'approved' }).lean();
@@ -341,9 +429,9 @@ app.post('/criar-pagamento', async (req, res) => {
         if ((totalBetByUser + value) > game.maxBetValue) {
             const remainingValue = game.maxBetValue - totalBetByUser;
             if (remainingValue <= 0) {
-                return res.status(400).json({ message: `Já atingiu o seu limite de aposta de R$ ${game.maxBetValue.toFixed(2)} para este jogo.` });
+                return res.status(400).json({ message: `JÃ¡ atingiu o seu limite de aposta de R$ ${game.maxBetValue.toFixed(2)} para este jogo.` });
             }
-            return res.status(400).json({ message: `O seu limite total para este jogo é R$ ${game.maxBetValue.toFixed(2)}. Ainda pode apostar até R$ ${remainingValue.toFixed(2)}.` });
+            return res.status(400).json({ message: `O seu limite total para este jogo Ã© R$ ${game.maxBetValue.toFixed(2)}. Ainda pode apostar atÃ© R$ ${remainingValue.toFixed(2)}.` });
         }
 
 
@@ -351,7 +439,7 @@ app.post('/criar-pagamento', async (req, res) => {
         const managedOdds = calculateManagedOdds(game, approvedBetsForGame);
         const odds = Number(managedOdds[oddsKey]);
         if (!Number.isFinite(odds) || odds <= 0) {
-            return res.status(400).json({ message: 'Odd inválida para este jogo.' });
+            return res.status(400).json({ message: 'Odd invÃ¡lida para este jogo.' });
         }
         await Game.findByIdAndUpdate(gameId, {
             $set: {
@@ -371,7 +459,7 @@ app.post('/criar-pagamento', async (req, res) => {
         const redirectUrl = process.env.SUCCESS_REDIRECT_URL || allowedOrigins[0] || req.get('origin');
         const serverUrl = process.env.SERVER_URL;
         if (!redirectUrl || !serverUrl) {
-            return res.status(500).json({ message: 'Configuração de URLs do servidor incompleta.' });
+            return res.status(500).json({ message: 'ConfiguraÃ§Ã£o de URLs do servidor incompleta.' });
         }
 
         const preferenceData = {
@@ -432,7 +520,7 @@ app.post('/webhook-mercadopago', async (req, res) => {
 app.get('/my-bets/:pix', async (req, res) => {
     try {
         const pix = cleanText(req.params.pix, 180);
-        if (!pix) return res.status(400).json({ success: false, message: 'PIX inválido.' });
+        if (!pix) return res.status(400).json({ success: false, message: 'PIX invÃ¡lido.' });
         const bets = await Bet.find({ 'user.pix': pix, status: 'approved' }).sort({ date: -1 });
         res.json({ success: true, bets });
     } catch (error) { res.json({ success: false, message: 'Erro ao buscar apostas.' }); }
@@ -448,9 +536,9 @@ app.get('/relatorio', async (req, res) => {
     try {
         const bets = await Bet.find({ status: 'approved' }).sort({ date: -1 });
         let html = `
-            <!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><title>Relatório de Apostas</title><script src="https://cdn.tailwindcss.com"></script></head>
+            <!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><title>RelatÃ³rio de Apostas</title><script src="https://cdn.tailwindcss.com"></script></head>
             <body class="bg-gray-100 p-8"><div class="container mx-auto bg-white p-6 rounded-lg shadow-md">
-            <h1 class="text-3xl font-bold mb-6 text-gray-800">Relatório de Apostas Confirmadas</h1><div class="overflow-x-auto">
+            <h1 class="text-3xl font-bold mb-6 text-gray-800">RelatÃ³rio de Apostas Confirmadas</h1><div class="overflow-x-auto">
             <table class="min-w-full bg-white"><thead class="bg-gray-800 text-white">
             <tr><th class="py-3 px-4 text-left">Data</th><th class="py-3 px-4 text-left">Utilizador</th><th class="py-3 px-4 text-left">Jogo</th><th class="py-3 px-4 text-left">Palpite</th><th class="py-3 px-4 text-left">Valor</th><th class="py-3 px-4 text-left">Odd</th><th class="py-3 px-4 text-left">Retorno Pot.</th></tr>
             </thead><tbody>`;
@@ -459,27 +547,52 @@ app.get('/relatorio', async (req, res) => {
         });
         html += `</tbody></table></div></div></body></html>`;
         res.send(html);
-    } catch (error) { res.status(500).send("Erro ao gerar o relatório."); }
+    } catch (error) { res.status(500).send("Erro ao gerar o relatÃ³rio."); }
 });
 
 
-// --- ROTAS DO PAINEL DE ADMINISTRAÇÃO ---
+// --- ROTAS DO PAINEL DE ADMINISTRAÃ‡ÃƒO ---
 app.get('/admin', (req, res) => {
-    res.send(`
-        <!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><title>Admin Login</title><script src="https://cdn.tailwindcss.com"></script></head>
-        <body class="bg-gray-200 min-h-screen flex items-center justify-center">
-        <div class="bg-white p-8 rounded-lg shadow-md w-full max-w-sm">
-        <h1 class="text-2xl font-bold mb-6 text-center">Login de Administrador</h1>
+    res.send(`<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin | AgroBet</title>
+    <style>
+        * { box-sizing: border-box; }
+        body { margin: 0; min-height: 100vh; display: grid; place-items: center; padding: 18px; font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: radial-gradient(circle at top left, rgba(53,183,104,.18), transparent 28rem), #101713; color: #f3f8f4; }
+        .login { width: min(100%, 390px); border: 1px solid #2d3d33; border-radius: 10px; background: #17231c; box-shadow: 0 24px 80px rgba(0,0,0,.32); overflow: hidden; }
+        .head { padding: 22px; border-bottom: 1px solid #2d3d33; }
+        .head b { display: block; color: #f5d45f; font-size: 22px; }
+        .head span { display: block; margin-top: 5px; color: #a8b8ad; font-size: 14px; }
+        form { display: grid; gap: 12px; padding: 22px; }
+        label { color: #a8b8ad; font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: .05em; }
+        input { width: 100%; height: 44px; border: 1px solid #34473b; border-radius: 7px; background: #0f1712; color: #fff; padding: 0 12px; outline: 0; }
+        input:focus { border-color: #35b768; box-shadow: 0 0 0 3px rgba(53,183,104,.13); }
+        button { height: 44px; border: 0; border-radius: 7px; background: #f5d45f; color: #11170f; font-weight: 900; cursor: pointer; }
+        .hint { color: #7f9286; font-size: 12px; line-height: 1.5; }
+    </style>
+</head>
+<body>
+    <section class="login">
+        <div class="head"><b>AgroBet Admin</b><span>Acesso operacional da plataforma</span></div>
         <form action="/admin/login" method="post">
-        <input type="password" name="password" placeholder="Senha" class="w-full p-2 border rounded mb-4" required>
-        <button type="submit" class="w-full bg-blue-500 text-white p-2 rounded hover:bg-blue-600">Entrar</button>
-        </form></div></body></html>`);
+            <label for="password">Senha administrativa</label>
+            <input id="password" type="password" name="password" placeholder="Digite a senha" autocomplete="current-password" required autofocus>
+            <button type="submit">Entrar no painel</button>
+            <div class="hint">Use a senha configurada no Render. Se ADMIN_PASSWORD nÃ£o estiver definida, vale a senha padrÃ£o do sistema.</div>
+        </form>
+    </section>
+</body>
+</html>`);
 });
 
 app.post('/admin/login', (req, res) => {
     const { password } = req.body;
-    if (password === process.env.ADMIN_PASSWORD) {
-        const token = jwt.sign({ admin: true }, process.env.JWT_SECRET, { expiresIn: '1h' });
+    const adminPassword = process.env.ADMIN_PASSWORD || DEFAULT_ADMIN_PASSWORD;
+    if (password === adminPassword) {
+        const token = jwt.sign({ admin: true }, JWT_SECRET, { expiresIn: '1h' });
         res.cookie('admin_token', token, {
             httpOnly: true,
             secure: process.env.NODE_ENV === 'production',
@@ -488,35 +601,52 @@ app.post('/admin/login', (req, res) => {
         });
         res.redirect('/admin/dashboard');
     } else {
-        res.send('<h1>Senha incorreta.</h1><a href="/admin">Tentar novamente</a>');
+        res.status(401).send(adminPage('Senha incorreta', '<div class="topline"><div><h1>Senha incorreta</h1><p class="muted">Confira a senha e tente novamente.</p></div><a class="btn secondary" href="/admin">Voltar</a></div>'));
     }
 });
 
-app.get('/admin/dashboard', authAdmin, (req, res) => {
-    res.send(`
-        <!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><title>Painel de Administração</title><script src="https://cdn.tailwindcss.com"></script></head>
-        <body class="bg-gray-200 min-h-screen flex items-center justify-center"><div class="container mx-auto p-8 bg-white rounded-lg shadow-lg max-w-5xl text-center">
-        <h1 class="text-4xl font-bold mb-8 text-gray-800">Painel de Administração</h1><div class="grid grid-cols-1 md:grid-cols-4 gap-6">
-        <a href="/admin/games" class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-6 px-4 rounded-lg text-xl transition-transform transform hover:scale-105 flex flex-col justify-center">Gerir Jogos</a>
-        <a href="/relatorio" target="_blank" class="bg-gray-500 hover:bg-gray-600 text-white font-bold py-6 px-4 rounded-lg text-xl transition-transform transform hover:scale-105 flex flex-col justify-center">Relatório Geral<span class="text-xs font-normal">(Todas as apostas)</span></a>
-        <a href="/admin/financial-report" target="_blank" class="bg-green-600 hover:bg-green-700 text-white font-bold py-6 px-4 rounded-lg text-xl transition-transform transform hover:scale-105 flex flex-col justify-center">Relatório Financeiro<span class="text-xs font-normal">(Balanço e Detalhes)</span></a>
-        <a href="/admin/payment-summary" target="_blank" class="bg-yellow-500 hover:bg-yellow-600 text-white font-bold py-6 px-4 rounded-lg text-xl transition-transform transform hover:scale-105 flex flex-col justify-center">Resumo de Pagamentos<span class="text-xs font-normal">(Valores por pessoa)</span></a>
-        </div>
-        
-        <!-- Seção de Ações Perigosas -->
-        <div class="mt-12 border-t-2 pt-6">
-            <h2 class="text-2xl font-bold text-red-700 mb-4">Ações Irreversíveis</h2>
-            <form action="/admin/clear-history" method="post" onsubmit="return confirm('Tem a certeza de que pretende limpar TODO o histórico de apostas e jogos finalizados? Esta ação não pode ser desfeita.');">
-                <button type="submit" class="bg-red-600 hover:bg-red-800 text-white font-bold py-3 px-6 rounded-lg transition-transform transform hover:scale-105">
-                    Limpar Histórico de Apostas Antigas
-                </button>
-            </form>
-        </div>
+app.get('/admin/dashboard', authAdmin, async (req, res) => {
+    try {
+        const [openGames, closedGames, finalizedGames, approvedBets, users] = await Promise.all([
+            Game.countDocuments({ status: 'aberto' }),
+            Game.countDocuments({ status: 'fechado' }),
+            Game.countDocuments({ status: 'finalizado' }),
+            Bet.countDocuments({ status: 'approved' }),
+            User.countDocuments()
+        ]);
 
-        <form action="/admin/logout" method="post" class="mt-8"><button type="submit" class="bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-6 rounded-lg">Sair</button></form>
-        </div></body></html>`);
+        const content = `
+            <div class="topline">
+                <div><h1>Painel de operação</h1><p class="muted">Atalhos e indicadores para administrar a rodada com rapidez.</p></div>
+                <a class="btn" href="/admin/games">Gerir jogos</a>
+            </div>
+            <section class="grid stats">
+                <div class="card card-pad stat"><b>${openGames}</b><span>Jogos abertos</span></div>
+                <div class="card card-pad stat"><b>${closedGames}</b><span>Aguardando resultado</span></div>
+                <div class="card card-pad stat"><b>${approvedBets}</b><span>Apostas confirmadas</span></div>
+                <div class="card card-pad stat"><b>${users}</b><span>Usuários cadastrados</span></div>
+            </section>
+            <section class="grid actions" style="margin-top:14px">
+                <a class="action" href="/admin/games"><b>Jogos e odds</b><span>Criar partidas, editar limites, fechar apostas e finalizar resultados.</span></a>
+                <a class="action" href="/admin/financial-report" target="_blank"><b>Financeiro</b><span>Ver saldo, ganhadores, perdas e exportar CSV.</span></a>
+                <a class="action" href="/admin/payment-summary" target="_blank"><b>Pagamentos</b><span>Total consolidado por pessoa para pagar via PIX.</span></a>
+            </section>
+            <section class="card danger-zone card-pad">
+                <div class="topline" style="margin:0">
+                    <div><h2 style="margin:0;font-size:18px;color:#9b1c1c">Ações irreversíveis</h2><p class="muted">Use apenas quando a rodada antiga já foi conferida.</p></div>
+                    <form action="/admin/clear-history" method="post" onsubmit="return confirm('Tem certeza de que deseja limpar TODO o histórico de apostas e jogos finalizados? Esta ação não pode ser desfeita.');">
+                        <button type="submit" class="btn danger">Limpar histórico antigo</button>
+                    </form>
+                </div>
+            </section>
+        `;
+
+        res.send(adminPage('Painel', content, 'dashboard'));
+    } catch (error) {
+        console.error('Erro ao carregar dashboard:', error);
+        res.status(500).send('Erro ao carregar painel administrativo.');
+    }
 });
-
 app.get('/admin/financial-report', authAdmin, async (req, res) => {
     try {
         const bets = await Bet.find({ status: 'approved' }).populate('gameId').lean();
@@ -565,11 +695,11 @@ app.get('/admin/financial-report', authAdmin, async (req, res) => {
         const balance = totalLostValue - totalToPay;
 
         res.send(`
-            <!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><title>Relatório Financeiro</title><script src="https://cdn.tailwindcss.com"></script></head>
+            <!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><title>RelatÃ³rio Financeiro</title><script src="https://cdn.tailwindcss.com"></script></head>
             <body class="bg-gray-100 p-4 md:p-8">
                 <div class="container mx-auto bg-white p-6 rounded-lg shadow-md">
                     <div class="flex flex-wrap justify-between items-center mb-6">
-                        <h1 class="text-3xl font-bold text-gray-800">Relatório Financeiro Detalhado</h1>
+                        <h1 class="text-3xl font-bold text-gray-800">RelatÃ³rio Financeiro Detalhado</h1>
                         <div>
                             <a href="/admin/payment-summary" class="bg-yellow-500 text-white font-bold py-2 px-4 rounded-md hover:bg-yellow-600 mr-2">Ver Resumo de Pagamentos</a>
                             <button id="export-csv" class="bg-green-600 text-white font-bold py-2 px-4 rounded-md hover:bg-green-700">Exportar para Excel (CSV)</button>
@@ -579,7 +709,7 @@ app.get('/admin/financial-report', authAdmin, async (req, res) => {
                     <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8 text-center">
                         <div class="bg-red-100 p-4 rounded-lg"><p class="text-sm text-red-700">Total Arrecadado (Perdas)</p><p class="text-2xl font-bold text-red-800">R$ ${totalLostValue.toFixed(2)}</p></div>
                         <div class="bg-blue-100 p-4 rounded-lg"><p class="text-sm text-blue-700">Total a Pagar (Ganhos)</p><p class="text-2xl font-bold text-blue-800">R$ ${totalToPay.toFixed(2)}</p></div>
-                        <div class="bg-green-100 p-4 rounded-lg"><p class="text-sm text-green-700">Balanço (Lucro)</p><p class="text-2xl font-bold text-green-800">R$ ${balance.toFixed(2)}</p></div>
+                        <div class="bg-green-100 p-4 rounded-lg"><p class="text-sm text-green-700">BalanÃ§o (Lucro)</p><p class="text-2xl font-bold text-green-800">R$ ${balance.toFixed(2)}</p></div>
                     </div>
                     
                     <div class="flex items-center mb-4">
@@ -619,8 +749,8 @@ app.get('/admin/financial-report', authAdmin, async (req, res) => {
                                 `).join('') : `
                                 <tr>
                                     <td colspan="8" class="text-center py-10 text-gray-500">
-                                        <p class="font-bold text-lg">Nenhum dado para exibir no relatório.</p>
-                                        <p>Isto pode acontecer porque ainda não há jogos finalizados que tenham apostas confirmadas.</p>
+                                        <p class="font-bold text-lg">Nenhum dado para exibir no relatÃ³rio.</p>
+                                        <p>Isto pode acontecer porque ainda nÃ£o hÃ¡ jogos finalizados que tenham apostas confirmadas.</p>
                                     </td>
                                 </tr>
                                 `}
@@ -672,8 +802,8 @@ app.get('/admin/financial-report', authAdmin, async (req, res) => {
         `);
 
     } catch (error) {
-        console.error("Erro ao gerar relatório financeiro:", error);
-        res.status(500).send("Erro ao gerar o relatório financeiro.");
+        console.error("Erro ao gerar relatÃ³rio financeiro:", error);
+        res.status(500).send("Erro ao gerar o relatÃ³rio financeiro.");
     }
 });
 
@@ -713,7 +843,7 @@ app.get('/admin/payment-summary', authAdmin, async (req, res) => {
                 <div class="container mx-auto bg-white p-6 rounded-lg shadow-md max-w-4xl">
                     <div class="flex justify-between items-center mb-6">
                         <h1 class="text-3xl font-bold text-gray-800">Resumo de Pagamentos</h1>
-                        <a href="/admin/financial-report" class="bg-blue-500 text-white font-bold py-2 px-4 rounded-md hover:bg-blue-600">Voltar ao Relatório Detalhado</a>
+                        <a href="/admin/financial-report" class="bg-blue-500 text-white font-bold py-2 px-4 rounded-md hover:bg-blue-600">Voltar ao RelatÃ³rio Detalhado</a>
                     </div>
                     <div class="overflow-x-auto">
                         <table class="min-w-full bg-white">
@@ -747,18 +877,18 @@ app.get('/admin/payment-summary', authAdmin, async (req, res) => {
     }
 });
 
-// NOVA ROTA PARA LIMPAR HISTÓRICO
+// NOVA ROTA PARA LIMPAR HISTÃ“RICO
 app.post('/admin/clear-history', authAdmin, async (req, res) => {
     try {
         // Deleta todas as apostas do banco de dados
         await Bet.deleteMany({});
-        // Deleta todos os jogos que já foram marcados como 'finalizado'
+        // Deleta todos os jogos que jÃ¡ foram marcados como 'finalizado'
         await Game.deleteMany({ status: 'finalizado' });
         
         res.redirect('/admin/dashboard');
     } catch (error) {
-        console.error("Erro ao limpar o histórico:", error);
-        res.status(500).send("Erro ao limpar o histórico de apostas.");
+        console.error("Erro ao limpar o histÃ³rico:", error);
+        res.status(500).send("Erro ao limpar o histÃ³rico de apostas.");
     }
 });
 
@@ -769,52 +899,83 @@ app.post('/admin/logout', (req, res) => {
 
 app.get('/admin/games', authAdmin, async (req, res) => {
     try {
-        const games = await Game.find().sort({ date: -1 });
-        res.send(`<!DOCTYPE html><html lang="pt-BR"><head><title>Gerir Jogos</title><script src="https://cdn.tailwindcss.com"></script></head>
-            <body class="bg-gray-100 p-8"><div class="container mx-auto"><h1 class="text-3xl font-bold mb-6">Gerir Jogos</h1>
-            <div class="bg-white p-6 rounded shadow-md mb-8">
-                <h2 class="text-2xl font-semibold mb-4">Adicionar Novo Jogo</h2>
-                <form action="/admin/add-game" method="post" class="space-y-4">
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <input name="home_name" placeholder="Nome Time Casa" class="p-2 border rounded" required>
-                        <input name="home_logo" placeholder="URL Logo Time Casa" class="p-2 border rounded" required>
-                        <input name="away_name" placeholder="Nome Time Visitante" class="p-2 border rounded" required>
-                        <input name="away_logo" placeholder="URL Logo Time Visitante" class="p-2 border rounded" required>
-                        <input name="date" placeholder="Data (ex: 25/12/2025 - 20:00)" class="p-2 border rounded" required>
-                        <input name="competition" placeholder="Competição" class="p-2 border rounded" required>
-                    </div>
-                     <div>
-                        <h3 class="font-semibold mb-2">Detalhes da Aposta</h3>
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                           <input type="number" step="0.01" name="max_bet_value" placeholder="Valor Máx. por Aposta (R$)" class="p-2 border rounded" value="35" required>
-                        </div>
-                    </div>
-                    <div><h3 class="font-semibold mb-2">Odds Iniciais</h3>
-                        <div class="grid grid-cols-3 gap-4">
-                           <input type="number" step="0.01" name="odds_home" placeholder="Odd Casa (ex: 1.5)" class="p-2 border rounded" required>
-                           <input type="number" step="0.01" name="odds_draw" placeholder="Odd Empate (ex: 3.0)" class="p-2 border rounded" required>
-                           <input type="number" step="0.01" name="odds_away" placeholder="Odd Visitante (ex: 2.5)" class="p-2 border rounded" required>
-                        </div>
-                    </div>
-                    <button type="submit" class="w-full bg-blue-500 text-white p-3 rounded hover:bg-blue-600 font-bold">Adicionar Jogo</button>
-                </form>
-            </div>
-            <div class="bg-white p-6 rounded shadow-md">
-                <h2 class="text-2xl font-semibold mb-4">Jogos Existentes</h2>
-                <div class="space-y-4">${games.map(game => `
-                    <div class="border p-4 rounded-lg">
-                        <p class="font-bold text-lg">${game.home.name} vs ${game.away.name}</p>
-                        <p class="text-sm">Odds: Casa ${game.odds.home.toFixed(2)} | Empate ${game.odds.draw.toFixed(2)} | Visitante ${game.odds.away.toFixed(2)}</p>
-                        <p>Status: <span class="font-semibold">${game.status}</span> | Resultado: <span class="font-semibold">${game.result}</span> | Limite Aposta: <span class="font-semibold">R$ ${game.maxBetValue.toFixed(2)}</span></p>
-                        <div class="mt-2">
-                            ${game.status === 'aberto' ? `<a href="/admin/edit-game/${game._id}" class="bg-blue-500 text-white px-3 py-1 rounded text-sm mr-2">Editar Jogo</a><form action="/admin/close-game/${game._id}" method="post" class="inline-block"><button class="bg-yellow-500 text-white px-3 py-1 rounded text-sm">Fechar Apostas</button></form>` : ''}
-                            ${game.status === 'fechado' ? `<form action="/admin/finalize-game/${game._id}" method="post"><select name="result" class="p-2 border rounded"><option value="home">Vencedor: ${game.home.name}</option><option value="away">Vencedor: ${game.away.name}</option><option value="empate">Empate</option></select><button type="submit" class="bg-green-500 text-white px-3 py-1 rounded text-sm ml-2">Finalizar Jogo</button></form>` : ''}
-                        </div>
-                    </div>`).join('')}
-                </div></div></div></body></html>`);
-    } catch (error) { res.status(500).send("Erro ao carregar jogos."); }
-});
+        const games = await Game.find().sort({ status: 1, date: -1 }).lean();
+        const openCount = games.filter(game => game.status === 'aberto').length;
+        const closedCount = games.filter(game => game.status === 'fechado').length;
+        const finalizedCount = games.filter(game => game.status === 'finalizado').length;
+        const statusClass = { aberto: 'open', fechado: 'closed', finalizado: 'done' };
+        const statusLabel = { aberto: 'Aberto', fechado: 'Fechado', finalizado: 'Finalizado' };
 
+        const rows = games.map(game => `
+            <tr>
+                <td><b>${escapeHtml(game.home?.name)} vs ${escapeHtml(game.away?.name)}</b><div class="muted">${escapeHtml(game.competition)} · ${escapeHtml(game.date)}</div></td>
+                <td><span class="pill ${statusClass[game.status] || ''}">${statusLabel[game.status] || game.status}</span></td>
+                <td>Casa ${Number(game.odds?.home || 0).toFixed(2)}<br><span class="muted">X ${Number(game.odds?.draw || 0).toFixed(2)} · Fora ${Number(game.odds?.away || 0).toFixed(2)}</span></td>
+                <td>R$ ${Number(game.maxBetValue || 0).toFixed(2)}</td>
+                <td>${game.result === 'pendente' ? '<span class="muted">Pendente</span>' : escapeHtml(game.result)}</td>
+                <td>
+                    <div class="inline-actions">
+                        ${game.status === 'aberto' ? `<a class="btn secondary" href="/admin/edit-game/${game._id}">Editar</a><form action="/admin/close-game/${game._id}" method="post"><button class="btn warn" type="submit">Fechar</button></form>` : ''}
+                        ${game.status === 'fechado' ? `<form action="/admin/finalize-game/${game._id}" method="post" class="inline-actions"><select name="result"><option value="home">${escapeHtml(game.home?.name)}</option><option value="away">${escapeHtml(game.away?.name)}</option><option value="empate">Empate</option></select><button class="btn" type="submit">Finalizar</button></form>` : ''}
+                        ${game.status === 'finalizado' ? '<span class="muted">Encerrado</span>' : ''}
+                    </div>
+                </td>
+            </tr>`).join('');
+
+        const content = `
+            <div class="topline">
+                <div><h1>Gerir jogos</h1><p class="muted">Crie jogos, ajuste odds e controle o ciclo da rodada.</p></div>
+                <a class="btn secondary" href="/admin/dashboard">Voltar ao painel</a>
+            </div>
+            <section class="grid stats" style="margin-bottom:14px">
+                <div class="card card-pad stat"><b>${openCount}</b><span>Abertos</span></div>
+                <div class="card card-pad stat"><b>${closedCount}</b><span>Fechados</span></div>
+                <div class="card card-pad stat"><b>${finalizedCount}</b><span>Finalizados</span></div>
+                <div class="card card-pad stat"><b>${games.length}</b><span>Total</span></div>
+            </section>
+            <div class="split">
+                <section class="card">
+                    <div class="section-title"><h2>Jogos existentes</h2><span class="muted">Ações rápidas por status</span></div>
+                    <div class="table-wrap">
+                        <table>
+                            <thead><tr><th>Jogo</th><th>Status</th><th>Odds</th><th>Limite</th><th>Resultado</th><th>Ações</th></tr></thead>
+                            <tbody>${rows || '<tr><td colspan="6" class="muted">Nenhum jogo cadastrado.</td></tr>'}</tbody>
+                        </table>
+                    </div>
+                </section>
+                <aside class="card">
+                    <div class="section-title"><h2>Novo jogo</h2><span class="muted">Cadastro rápido</span></div>
+                    <form action="/admin/add-game" method="post" class="card-pad form-grid">
+                        <div class="cols-2">
+                            <div class="form-row"><label>Time casa</label><input name="home_name" placeholder="Ex: Medicina" required></div>
+                            <div class="form-row"><label>Logo casa</label><input name="home_logo" placeholder="URL do escudo" required></div>
+                        </div>
+                        <div class="cols-2">
+                            <div class="form-row"><label>Time visitante</label><input name="away_name" placeholder="Ex: Direito" required></div>
+                            <div class="form-row"><label>Logo visitante</label><input name="away_logo" placeholder="URL do escudo" required></div>
+                        </div>
+                        <div class="cols-2">
+                            <div class="form-row"><label>Data</label><input name="date" placeholder="25/12/2026 - 20:00" required></div>
+                            <div class="form-row"><label>Competição</label><input name="competition" placeholder="Interclasse" required></div>
+                        </div>
+                        <div class="form-row"><label>Limite por usuário neste jogo</label><input type="number" step="0.01" name="max_bet_value" value="35" required></div>
+                        <div class="cols-3">
+                            <div class="form-row"><label>Odd casa</label><input type="number" step="0.01" name="odds_home" placeholder="1.50" required></div>
+                            <div class="form-row"><label>Odd empate</label><input type="number" step="0.01" name="odds_draw" placeholder="3.00" required></div>
+                            <div class="form-row"><label>Odd visitante</label><input type="number" step="0.01" name="odds_away" placeholder="2.20" required></div>
+                        </div>
+                        <button type="submit" class="btn">Adicionar jogo</button>
+                    </form>
+                </aside>
+            </div>
+        `;
+
+        res.send(adminPage('Gerir jogos', content, 'games'));
+    } catch (error) {
+        console.error('Erro ao carregar jogos:', error);
+        res.status(500).send('Erro ao carregar jogos.');
+    }
+});
 app.post('/admin/add-game', authAdmin, async (req, res) => {
     try {
         const { home_name, home_logo, away_name, away_logo, date, competition, odds_home, odds_draw, odds_away, max_bet_value } = req.body;
@@ -823,7 +984,7 @@ app.post('/admin/add-game', authAdmin, async (req, res) => {
         const oddsAway = toMoney(odds_away);
         const maxBetValue = toMoney(max_bet_value);
         if (!oddsHome || !oddsDraw || !oddsAway || !maxBetValue || maxBetValue <= 0) {
-            return res.status(400).send("Odds e limite de aposta precisam ser valores válidos.");
+            return res.status(400).send("Odds e limite de aposta precisam ser valores vÃ¡lidos.");
         }
         const newGame = new Game({
             home: { name: cleanText(home_name), logo: cleanText(home_logo, 500) },
@@ -841,27 +1002,35 @@ app.post('/admin/add-game', authAdmin, async (req, res) => {
 
 app.get('/admin/edit-game/:id', authAdmin, async(req, res) => {
     try {
-        const game = await Game.findById(req.params.id);
-        if (!game) return res.status(404).send('Jogo não encontrado');
-        res.send(`<!DOCTYPE html>
-            <html lang="pt-BR"><head><title>Editar Jogo</title><script src="https://cdn.tailwindcss.com"></script></head>
-            <body class="bg-gray-100 p-8"><div class="container mx-auto max-w-lg">
-            <h1 class="text-3xl font-bold mb-6">Editar Jogo: ${game.home.name} vs ${game.away.name}</h1>
-            <div class="bg-white p-6 rounded shadow-md">
-                <form action="/admin/edit-game/${game._id}" method="post" class="space-y-4">
-                    <div><label class="block font-semibold">Valor Máx. por Aposta (R$)</label><input type="number" step="0.01" name="max_bet_value" value="${game.maxBetValue}" class="w-full p-2 border rounded" required></div>
-                    <hr/>
-                    <h3 class="font-bold text-lg pt-2">Odds</h3>
-                    <div><label class="block font-semibold">Odd Casa</label><input type="number" step="0.01" name="odds_home" value="${game.odds.home}" class="w-full p-2 border rounded" required></div>
-                    <div><label class="block font-semibold">Odd Empate</label><input type="number" step="0.01" name="odds_draw" value="${game.odds.draw}" class="w-full p-2 border rounded" required></div>
-                    <div><label class="block font-semibold">Odd Visitante</label><input type="number" step="0.01" name="odds_away" value="${game.odds.away}" class="w-full p-2 border rounded" required></div>
-                    <button type="submit" class="w-full bg-blue-500 text-white p-3 rounded hover:bg-blue-600 font-bold">Salvar Alterações</button>
-                    <a href="/admin/games" class="block text-center mt-2">Cancelar</a>
-                </form>
-            </div></div></body></html>`);
-    } catch (error) { res.status(500).send("Erro ao carregar jogo para edição."); }
-});
+        const game = await Game.findById(req.params.id).lean();
+        if (!game) return res.status(404).send(adminPage('Jogo não encontrado', '<div class="topline"><div><h1>Jogo não encontrado</h1><p class="muted">Esse jogo não existe ou foi removido.</p></div><a class="btn secondary" href="/admin/games">Voltar</a></div>', 'games'));
 
+        const content = `
+            <div class="topline">
+                <div><h1>Editar jogo</h1><p class="muted">${escapeHtml(game.home?.name)} vs ${escapeHtml(game.away?.name)}</p></div>
+                <a class="btn secondary" href="/admin/games">Voltar aos jogos</a>
+            </div>
+            <section class="card" style="max-width:760px">
+                <div class="section-title"><h2>Risco e odds</h2><span class="pill ${game.status === 'aberto' ? 'open' : game.status === 'fechado' ? 'closed' : 'done'}">${escapeHtml(game.status)}</span></div>
+                <form action="/admin/edit-game/${game._id}" method="post" class="card-pad form-grid">
+                    <div class="form-row"><label>Limite por usuário neste jogo</label><input type="number" step="0.01" name="max_bet_value" value="${Number(game.maxBetValue || 0)}" required></div>
+                    <div class="cols-3">
+                        <div class="form-row"><label>Odd casa</label><input type="number" step="0.01" name="odds_home" value="${Number(game.odds?.home || 0)}" required></div>
+                        <div class="form-row"><label>Odd empate</label><input type="number" step="0.01" name="odds_draw" value="${Number(game.odds?.draw || 0)}" required></div>
+                        <div class="form-row"><label>Odd visitante</label><input type="number" step="0.01" name="odds_away" value="${Number(game.odds?.away || 0)}" required></div>
+                    </div>
+                    <p class="muted" style="margin:0">Ao salvar, essas odds também viram a base do modelo de risco dinâmico.</p>
+                    <div class="inline-actions"><button type="submit" class="btn">Salvar alterações</button><a href="/admin/games" class="btn secondary">Cancelar</a></div>
+                </form>
+            </section>
+        `;
+
+        res.send(adminPage('Editar jogo', content, 'games'));
+    } catch (error) {
+        console.error('Erro ao carregar jogo para edição:', error);
+        res.status(500).send('Erro ao carregar jogo para edição.');
+    }
+});
 app.post('/admin/edit-game/:id', authAdmin, async(req, res) => {
     try {
         const { odds_home, odds_draw, odds_away, max_bet_value } = req.body;
@@ -870,7 +1039,7 @@ app.post('/admin/edit-game/:id', authAdmin, async(req, res) => {
         const oddsAway = toMoney(odds_away);
         const maxBetValue = toMoney(max_bet_value);
         if (!oddsHome || !oddsDraw || !oddsAway || !maxBetValue || maxBetValue <= 0) {
-            return res.status(400).send("Odds e limite de aposta precisam ser valores válidos.");
+            return res.status(400).send("Odds e limite de aposta precisam ser valores vÃ¡lidos.");
         }
         await Game.findByIdAndUpdate(req.params.id, {
             $set: {
@@ -884,7 +1053,7 @@ app.post('/admin/edit-game/:id', authAdmin, async(req, res) => {
             }
         });
         res.redirect('/admin/games');
-    } catch(error){ res.status(500).send("Erro ao salvar alterações."); }
+    } catch(error){ res.status(500).send("Erro ao salvar alteraÃ§Ãµes."); }
 });
 
 
