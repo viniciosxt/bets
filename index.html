@@ -3,385 +3,1475 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AgroBet - Apostas Esportivas</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <meta name="theme-color" content="#07110c">
+    <meta name="description" content="AgroBet - plataforma de apostas esportivas com odds dinâmicas e experiência moderna.">
+    <title>AgroBet | Apostas Esportivas</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Montserrat:wght@400;700&display=swap');
-        body { font-family: 'Montserrat', sans-serif; background-color: #f8f8f8; }
-        .title-font { font-family: 'Bebas Neue', cursive; }
-        .bet-option.selected { background-color: #1b5e20; color: white; border-color: #1b5e20; }
-        .confirm-btn { background: linear-gradient(135deg, #2e7d32 0%, #1b5e20 100%); transition: all 0.3s ease; }
-        .confirm-btn:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 5px 15px rgba(46, 125, 0.4); }
+        :root {
+            color-scheme: dark;
+            --bg: #07110c;
+            --surface: #0d1913;
+            --surface-2: #13241b;
+            --surface-3: #193225;
+            --text: #f4f8f5;
+            --muted: #9db0a5;
+            --line: rgba(255, 255, 255, 0.1);
+            --accent: #31d17d;
+            --accent-2: #f2b84b;
+            --info: #5ec7e9;
+            --danger: #ff6b6b;
+            --shadow: 0 24px 80px rgba(0, 0, 0, 0.32);
+            --radius: 8px;
+        }
+
+        * { box-sizing: border-box; }
+        html { scroll-behavior: smooth; }
+        body {
+            margin: 0;
+            min-height: 100vh;
+            font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+            background:
+                radial-gradient(circle at 14% -8%, rgba(49, 209, 125, 0.22), transparent 31rem),
+                radial-gradient(circle at 90% 2%, rgba(94, 199, 233, 0.12), transparent 28rem),
+                linear-gradient(180deg, #07110c 0%, #08120d 46%, #0a100d 100%);
+            color: var(--text);
+        }
+
+        body.modal-open { overflow: hidden; }
+        button, input { font: inherit; }
+        button { cursor: pointer; }
+        button:disabled { cursor: not-allowed; opacity: 0.58; }
+        img { display: block; max-width: 100%; }
+
+        .shell {
+            width: min(1180px, calc(100% - 32px));
+            margin: 0 auto;
+        }
+
+        .topbar {
+            position: sticky;
+            top: 0;
+            z-index: 30;
+            border-bottom: 1px solid var(--line);
+            background: rgba(7, 17, 12, 0.82);
+            backdrop-filter: blur(18px);
+        }
+
+        .nav {
+            min-height: 76px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 18px;
+        }
+
+        .brand {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            min-width: 0;
+        }
+
+        .brand-mark {
+            width: 42px;
+            height: 42px;
+            display: grid;
+            place-items: center;
+            border-radius: var(--radius);
+            background: linear-gradient(135deg, var(--accent), #10884c);
+            color: #04130b;
+            box-shadow: 0 12px 30px rgba(49, 209, 125, 0.28);
+        }
+
+        .brand strong {
+            display: block;
+            font-size: 1.12rem;
+            letter-spacing: 0;
+        }
+
+        .brand span {
+            display: block;
+            color: var(--muted);
+            font-size: 0.78rem;
+        }
+
+        .nav-actions {
+            display: flex;
+            align-items: center;
+            justify-content: flex-end;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .user-pill {
+            display: none;
+            align-items: center;
+            gap: 10px;
+            max-width: 220px;
+            padding: 8px 11px;
+            border: 1px solid var(--line);
+            border-radius: 999px;
+            background: rgba(255, 255, 255, 0.06);
+            color: var(--muted);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .user-pill.is-visible { display: flex; }
+        .user-pill b { color: var(--text); overflow: hidden; text-overflow: ellipsis; }
+
+        .icon-btn,
+        .primary-btn,
+        .ghost-btn {
+            min-height: 42px;
+            border: 0;
+            border-radius: var(--radius);
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 9px;
+            transition: transform 180ms ease, border-color 180ms ease, background 180ms ease, box-shadow 180ms ease;
+        }
+
+        .icon-btn {
+            width: 42px;
+            border: 1px solid var(--line);
+            background: rgba(255, 255, 255, 0.06);
+            color: var(--text);
+        }
+
+        .primary-btn {
+            padding: 0 18px;
+            background: linear-gradient(135deg, var(--accent), #11945a);
+            color: #031109;
+            font-weight: 800;
+            box-shadow: 0 16px 38px rgba(49, 209, 125, 0.22);
+        }
+
+        .ghost-btn {
+            padding: 0 15px;
+            border: 1px solid var(--line);
+            background: rgba(255, 255, 255, 0.06);
+            color: var(--text);
+            font-weight: 700;
+        }
+
+        .icon-btn:hover,
+        .primary-btn:hover:not(:disabled),
+        .ghost-btn:hover:not(:disabled) {
+            transform: translateY(-2px);
+            border-color: rgba(255, 255, 255, 0.22);
+        }
+
+        .logout-btn { display: none; }
+        .logout-btn.is-visible { display: inline-flex; }
+
+        .hero {
+            padding: 56px 0 22px;
+            display: grid;
+            grid-template-columns: minmax(0, 1.05fr) minmax(320px, 0.95fr);
+            align-items: center;
+            gap: 28px;
+        }
+
+        .hero-copy h1 {
+            max-width: 760px;
+            margin: 0;
+            font-size: clamp(2.55rem, 7vw, 5.45rem);
+            line-height: 0.93;
+            letter-spacing: 0;
+        }
+
+        .hero-copy p {
+            max-width: 650px;
+            color: var(--muted);
+            font-size: clamp(1rem, 2vw, 1.14rem);
+            line-height: 1.7;
+            margin: 20px 0 0;
+        }
+
+        .hero-actions {
+            display: flex;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 12px;
+            margin-top: 26px;
+        }
+
+        .trust-row {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 10px;
+            margin-top: 28px;
+            max-width: 670px;
+        }
+
+        .metric {
+            min-height: 86px;
+            padding: 16px;
+            border: 1px solid var(--line);
+            border-radius: var(--radius);
+            background: rgba(255, 255, 255, 0.055);
+        }
+
+        .metric b {
+            display: block;
+            font-size: 1.35rem;
+        }
+
+        .metric span {
+            display: block;
+            margin-top: 4px;
+            color: var(--muted);
+            font-size: 0.82rem;
+        }
+
+        .match-stage {
+            position: relative;
+            min-height: 430px;
+            border: 1px solid var(--line);
+            border-radius: var(--radius);
+            overflow: hidden;
+            background:
+                linear-gradient(145deg, rgba(49, 209, 125, 0.2), rgba(94, 199, 233, 0.06)),
+                repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.035) 0 1px, transparent 1px 82px),
+                #0e1b14;
+            box-shadow: var(--shadow);
+        }
+
+        .pitch {
+            position: absolute;
+            inset: 24px;
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            border-radius: var(--radius);
+        }
+
+        .pitch::before,
+        .pitch::after {
+            content: "";
+            position: absolute;
+            inset: 18% 42%;
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            border-radius: 999px;
+        }
+
+        .pitch::after {
+            inset: 0 50% 0 auto;
+            width: 1px;
+            border: 0;
+            background: rgba(255, 255, 255, 0.12);
+        }
+
+        .live-ticket {
+            position: absolute;
+            left: 22px;
+            right: 22px;
+            bottom: 22px;
+            padding: 18px;
+            border: 1px solid rgba(255, 255, 255, 0.13);
+            border-radius: var(--radius);
+            background: rgba(5, 13, 9, 0.82);
+            backdrop-filter: blur(18px);
+        }
+
+        .ticket-top,
+        .ticket-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 14px;
+        }
+
+        .ticket-top span {
+            color: var(--accent-2);
+            font-size: 0.78rem;
+            font-weight: 800;
+            text-transform: uppercase;
+        }
+
+        .ticket-top b { font-size: 0.9rem; }
+
+        .ticket-row {
+            margin-top: 18px;
+            align-items: stretch;
+        }
+
+        .team-mini {
+            flex: 1;
+            display: grid;
+            place-items: center;
+            gap: 8px;
+            min-width: 0;
+            padding: 14px;
+            border: 1px solid var(--line);
+            border-radius: var(--radius);
+            background: rgba(255, 255, 255, 0.06);
+            text-align: center;
+        }
+
+        .team-mini i { color: var(--accent); font-size: 1.45rem; }
+        .team-mini span { color: var(--muted); font-size: 0.82rem; }
+
+        .vs-mini {
+            width: 58px;
+            display: grid;
+            place-items: center;
+            color: var(--muted);
+            font-weight: 900;
+        }
+
+        .ticker {
+            position: absolute;
+            top: 22px;
+            left: 22px;
+            right: 22px;
+            display: flex;
+            gap: 10px;
+            overflow: hidden;
+        }
+
+        .ticker span {
+            flex: 1;
+            min-width: 125px;
+            padding: 10px 12px;
+            border: 1px solid var(--line);
+            border-radius: var(--radius);
+            background: rgba(255, 255, 255, 0.065);
+            color: var(--muted);
+            font-size: 0.82rem;
+            animation: floatIn 720ms ease both;
+        }
+
+        .section-head {
+            display: flex;
+            align-items: end;
+            justify-content: space-between;
+            gap: 18px;
+            margin: 42px 0 18px;
+        }
+
+        .section-head h2 {
+            margin: 0;
+            font-size: clamp(1.55rem, 3vw, 2.1rem);
+        }
+
+        .section-head p {
+            margin: 8px 0 0;
+            color: var(--muted);
+        }
+
+        .filters {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 5px;
+            border: 1px solid var(--line);
+            border-radius: var(--radius);
+            background: rgba(255, 255, 255, 0.05);
+        }
+
+        .filter-btn {
+            border: 0;
+            border-radius: 6px;
+            padding: 9px 12px;
+            background: transparent;
+            color: var(--muted);
+            font-weight: 800;
+            transition: background 180ms ease, color 180ms ease;
+        }
+
+        .filter-btn.is-active {
+            background: rgba(49, 209, 125, 0.16);
+            color: var(--text);
+        }
+
+        .games-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 16px;
+        }
+
+        .game-card,
+        .result-card {
+            border: 1px solid var(--line);
+            border-radius: var(--radius);
+            background: rgba(255, 255, 255, 0.065);
+            box-shadow: 0 18px 46px rgba(0, 0, 0, 0.18);
+            overflow: hidden;
+            animation: cardEnter 460ms ease both;
+        }
+
+        .game-card:hover { border-color: rgba(49, 209, 125, 0.38); }
+
+        .game-head {
+            display: flex;
+            justify-content: space-between;
+            gap: 14px;
+            padding: 17px;
+            border-bottom: 1px solid var(--line);
+            background: rgba(255, 255, 255, 0.035);
+        }
+
+        .game-head b { display: block; }
+        .game-head span { color: var(--muted); font-size: 0.84rem; }
+
+        .status-pill {
+            align-self: start;
+            display: inline-flex;
+            align-items: center;
+            gap: 7px;
+            white-space: nowrap;
+            padding: 8px 10px;
+            border-radius: 999px;
+            background: rgba(49, 209, 125, 0.13);
+            color: var(--accent);
+            font-size: 0.78rem;
+            font-weight: 900;
+        }
+
+        .game-body { padding: 18px; }
+
+        .teams {
+            display: grid;
+            grid-template-columns: 1fr 54px 1fr;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .team {
+            min-width: 0;
+            text-align: center;
+        }
+
+        .team-logo {
+            width: 64px;
+            height: 64px;
+            margin: 0 auto 10px;
+            border-radius: 999px;
+            border: 1px solid var(--line);
+            background: rgba(255, 255, 255, 0.08);
+            object-fit: contain;
+            padding: 8px;
+        }
+
+        .team strong {
+            display: block;
+            overflow-wrap: anywhere;
+            font-size: 0.96rem;
+        }
+
+        .vs {
+            display: grid;
+            place-items: center;
+            height: 54px;
+            border: 1px solid var(--line);
+            border-radius: 999px;
+            color: var(--muted);
+            font-weight: 900;
+        }
+
+        .odds-grid {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 8px;
+            margin-top: 18px;
+        }
+
+        .odd-btn {
+            min-height: 72px;
+            padding: 9px;
+            border: 1px solid var(--line);
+            border-radius: var(--radius);
+            background: rgba(255, 255, 255, 0.05);
+            color: var(--text);
+            text-align: left;
+            transition: transform 170ms ease, border-color 170ms ease, background 170ms ease;
+        }
+
+        .odd-btn:hover:not(:disabled),
+        .odd-btn.is-selected {
+            transform: translateY(-2px);
+            border-color: rgba(49, 209, 125, 0.55);
+            background: rgba(49, 209, 125, 0.14);
+        }
+
+        .odd-btn span {
+            display: block;
+            color: var(--muted);
+            font-size: 0.75rem;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .odd-btn b {
+            display: block;
+            margin-top: 6px;
+            color: var(--accent);
+            font-size: 1.12rem;
+        }
+
+        .bet-panel {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) auto;
+            gap: 10px;
+            margin-top: 14px;
+        }
+
+        .field {
+            position: relative;
+        }
+
+        .field input {
+            width: 100%;
+            height: 48px;
+            border: 1px solid var(--line);
+            border-radius: var(--radius);
+            background: rgba(0, 0, 0, 0.2);
+            color: var(--text);
+            outline: 0;
+            padding: 0 13px;
+            transition: border-color 180ms ease, box-shadow 180ms ease;
+        }
+
+        .field input:focus {
+            border-color: rgba(49, 209, 125, 0.6);
+            box-shadow: 0 0 0 4px rgba(49, 209, 125, 0.12);
+        }
+
+        .payout {
+            min-width: 156px;
+            display: grid;
+            align-content: center;
+            padding: 8px 12px;
+            border: 1px solid var(--line);
+            border-radius: var(--radius);
+            background: rgba(255, 255, 255, 0.05);
+        }
+
+        .payout span {
+            color: var(--muted);
+            font-size: 0.72rem;
+            font-weight: 800;
+            text-transform: uppercase;
+        }
+
+        .payout b { color: var(--accent-2); margin-top: 3px; }
+
+        .limit-note,
+        .inline-error {
+            min-height: 18px;
+            margin: 10px 0 0;
+            color: var(--muted);
+            font-size: 0.82rem;
+        }
+
+        .inline-error { color: var(--danger); }
+
+        .card-action {
+            width: 100%;
+            margin-top: 12px;
+        }
+
+        .results-list {
+            display: grid;
+            gap: 10px;
+            margin-bottom: 52px;
+        }
+
+        .result-card {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 14px;
+            padding: 16px;
+        }
+
+        .result-card p { margin: 0; }
+        .result-card small { color: var(--muted); }
+
+        .winner {
+            flex: 0 0 auto;
+            padding: 8px 10px;
+            border-radius: 999px;
+            background: rgba(94, 199, 233, 0.12);
+            color: var(--info);
+            font-weight: 900;
+            text-align: right;
+        }
+
+        .empty,
+        .error-state,
+        .skeleton {
+            border: 1px solid var(--line);
+            border-radius: var(--radius);
+            background: rgba(255, 255, 255, 0.055);
+        }
+
+        .empty,
+        .error-state {
+            padding: 28px;
+            color: var(--muted);
+            text-align: center;
+        }
+
+        .error-state { color: #ffd2d2; }
+
+        .skeleton {
+            min-height: 360px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .skeleton::after {
+            content: "";
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.08), transparent);
+            animation: shimmer 1.25s infinite;
+        }
+
+        .modal {
+            position: fixed;
+            inset: 0;
+            z-index: 50;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            padding: 18px;
+            background: rgba(0, 0, 0, 0.68);
+            backdrop-filter: blur(12px);
+        }
+
+        .modal.is-open { display: flex; }
+
+        .dialog {
+            width: min(100%, 430px);
+            max-height: min(86vh, 760px);
+            overflow: auto;
+            border: 1px solid var(--line);
+            border-radius: var(--radius);
+            background: #0c1711;
+            box-shadow: var(--shadow);
+            animation: dialogIn 220ms ease both;
+        }
+
+        .dialog.wide { width: min(100%, 760px); }
+
+        .dialog-head {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            padding: 18px;
+            border-bottom: 1px solid var(--line);
+        }
+
+        .dialog-head h3 { margin: 0; font-size: 1.25rem; }
+        .dialog-body { padding: 18px; }
+
+        .auth-grid {
+            display: grid;
+            gap: 12px;
+        }
+
+        .auth-grid label {
+            display: grid;
+            gap: 7px;
+            color: var(--muted);
+            font-size: 0.86rem;
+            font-weight: 700;
+        }
+
+        .auth-grid input {
+            height: 48px;
+            border: 1px solid var(--line);
+            border-radius: var(--radius);
+            background: rgba(255, 255, 255, 0.055);
+            color: var(--text);
+            outline: 0;
+            padding: 0 12px;
+        }
+
+        .switch-link {
+            border: 0;
+            background: transparent;
+            color: var(--accent);
+            font-weight: 800;
+            margin: 14px auto 0;
+            display: block;
+        }
+
+        .bet-list {
+            display: grid;
+            gap: 10px;
+        }
+
+        .bet-item {
+            padding: 14px;
+            border: 1px solid var(--line);
+            border-radius: var(--radius);
+            background: rgba(255, 255, 255, 0.05);
+        }
+
+        .bet-item p { margin: 5px 0 0; color: var(--muted); }
+        .bet-item b { color: var(--text); }
+
+        .toast {
+            position: fixed;
+            right: 18px;
+            bottom: 18px;
+            z-index: 70;
+            max-width: min(380px, calc(100% - 36px));
+            display: none;
+            padding: 13px 15px;
+            border: 1px solid rgba(255, 255, 255, 0.14);
+            border-radius: var(--radius);
+            background: #111d16;
+            color: var(--text);
+            box-shadow: var(--shadow);
+        }
+
+        .toast.is-visible { display: block; animation: cardEnter 220ms ease both; }
+
+        .loading-dots {
+            display: inline-flex;
+            gap: 5px;
+            margin-right: 8px;
+        }
+
+        .loading-dots span {
+            width: 8px;
+            height: 8px;
+            border-radius: 999px;
+            background: var(--accent);
+            animation: pulse 720ms ease-in-out infinite alternate;
+        }
+
+        .loading-dots span:nth-child(2) { animation-delay: 120ms; }
+        .loading-dots span:nth-child(3) { animation-delay: 240ms; }
+
+        [hidden] { display: none !important; }
+
+        @keyframes cardEnter {
+            from { opacity: 0; transform: translateY(12px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        @keyframes dialogIn {
+            from { opacity: 0; transform: translateY(16px) scale(0.98); }
+            to { opacity: 1; transform: translateY(0) scale(1); }
+        }
+
+        @keyframes shimmer {
+            from { transform: translateX(-100%); }
+            to { transform: translateX(100%); }
+        }
+
+        @keyframes pulse {
+            from { opacity: 0.35; transform: translateY(0); }
+            to { opacity: 1; transform: translateY(-4px); }
+        }
+
+        @keyframes floatIn {
+            from { opacity: 0; transform: translateY(-8px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            *, *::before, *::after {
+                animation-duration: 0.01ms !important;
+                animation-iteration-count: 1 !important;
+                scroll-behavior: auto !important;
+                transition-duration: 0.01ms !important;
+            }
+        }
+
+        @media (max-width: 900px) {
+            .hero { grid-template-columns: 1fr; padding-top: 36px; }
+            .match-stage { min-height: 360px; }
+            .games-grid { grid-template-columns: 1fr; }
+        }
+
+        @media (max-width: 640px) {
+            .shell { width: min(100% - 22px, 1180px); }
+            .nav { align-items: flex-start; padding: 12px 0; }
+            .brand span { display: none; }
+            .nav-actions { gap: 7px; }
+            .ghost-btn .btn-text { display: none; }
+            .user-pill { order: 3; width: 100%; max-width: none; justify-content: center; }
+            .hero-copy h1 { font-size: clamp(2.25rem, 14vw, 3.9rem); }
+            .trust-row { grid-template-columns: 1fr; }
+            .section-head { display: block; }
+            .filters { margin-top: 14px; overflow-x: auto; }
+            .teams { grid-template-columns: 1fr; }
+            .vs { margin: 0 auto; width: 54px; }
+            .odds-grid { grid-template-columns: 1fr; }
+            .bet-panel { grid-template-columns: 1fr; }
+            .payout { min-width: 0; }
+            .result-card { display: grid; }
+            .winner { justify-self: start; text-align: left; }
+        }
     </style>
 </head>
-<body class="bg-gray-100">
-
-    <!-- Header -->
-    <header class="bg-green-800 text-white py-4 shadow-md sticky top-0 z-40">
-        <div class="container mx-auto px-4 flex justify-between items-center">
-            <div><h1 class="title-font text-4xl">AGROBET</h1><p class="text-sm">Apostas Esportivas</p></div>
-            <div class="flex items-center space-x-4">
-                <div id="user-info" class="text-right hidden"><p class="font-bold text-lg">Olá, <span id="user-name-display"></span>!</p></div>
-                <button id="logout-btn" class="hidden bg-red-600 text-white px-3 py-1 rounded-full text-xs font-bold hover:bg-red-700 transition">Sair</button>
-                <button id="my-bets-btn" class="bg-white text-green-800 px-4 py-2 rounded-full font-bold flex items-center hover:bg-gray-200 transition"><i class="fas fa-receipt mr-2"></i>Minhas Apostas</button>
+<body>
+    <header class="topbar">
+        <nav class="shell nav" aria-label="Navegação principal">
+            <div class="brand">
+                <div class="brand-mark" aria-hidden="true"><i class="fa-solid fa-shield-halved"></i></div>
+                <div>
+                    <strong>AgroBet</strong>
+                    <span>Apostas esportivas com controle e transparência</span>
+                </div>
             </div>
-        </div>
+            <div class="nav-actions">
+                <div id="user-info" class="user-pill" aria-live="polite">
+                    <i class="fa-solid fa-user-check"></i>
+                    <span>Olá, <b id="user-name-display"></b></span>
+                </div>
+                <button id="my-bets-btn" class="ghost-btn" type="button">
+                    <i class="fa-solid fa-receipt"></i>
+                    <span class="btn-text">Minhas apostas</span>
+                </button>
+                <button id="login-open-btn" class="primary-btn" type="button">
+                    <i class="fa-solid fa-right-to-bracket"></i>
+                    <span>Entrar</span>
+                </button>
+                <button id="logout-btn" class="icon-btn logout-btn" type="button" title="Sair" aria-label="Sair">
+                    <i class="fa-solid fa-arrow-right-from-bracket"></i>
+                </button>
+            </div>
+        </nav>
     </header>
 
-    <!-- Main Content -->
-    <main class="container mx-auto px-4 py-8">
-        <section id="open-games-section">
-            <h2 class="title-font text-3xl md:text-4xl text-green-800 mb-8 text-center">JOGOS DISPONÍVEIS</h2>
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-8" id="games-container"></div>
+    <main>
+        <section class="shell hero" aria-labelledby="hero-title">
+            <div class="hero-copy">
+                <h1 id="hero-title">Apostas mais rápidas, claras e confiáveis.</h1>
+                <p>Escolha seus palpites com odds visíveis, limite por jogo, retorno potencial em tempo real e uma navegação pensada para celular e desktop.</p>
+                <div class="hero-actions">
+                    <a class="primary-btn" href="#open-games-section">
+                        <i class="fa-solid fa-bolt"></i>
+                        Ver jogos abertos
+                    </a>
+                    <button id="hero-bets-btn" class="ghost-btn" type="button">
+                        <i class="fa-solid fa-chart-line"></i>
+                        Acompanhar apostas
+                    </button>
+                </div>
+                <div class="trust-row" aria-label="Resumo da plataforma">
+                    <div class="metric">
+                        <b id="metric-games">--</b>
+                        <span>jogos disponíveis</span>
+                    </div>
+                    <div class="metric">
+                        <b id="metric-bets">--</b>
+                        <span>apostas confirmadas</span>
+                    </div>
+                    <div class="metric">
+                        <b>PIX</b>
+                        <span>pagamento simples e rastreável</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="match-stage" aria-hidden="true">
+                <div class="pitch"></div>
+                <div class="ticker">
+                    <span>Odds dinâmicas</span>
+                    <span>Limite por partida</span>
+                    <span>Retorno imediato</span>
+                </div>
+                <div class="live-ticket">
+                    <div class="ticket-top">
+                        <span>Bilhete em destaque</span>
+                        <b>Retorno potencial</b>
+                    </div>
+                    <div class="ticket-row">
+                        <div class="team-mini">
+                            <i class="fa-solid fa-house-flag"></i>
+                            <b>Casa</b>
+                            <span>1.85</span>
+                        </div>
+                        <div class="vs-mini">VS</div>
+                        <div class="team-mini">
+                            <i class="fa-solid fa-plane-arrival"></i>
+                            <b>Visitante</b>
+                            <span>2.20</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
         </section>
-        <section id="results-section" class="mt-16">
-            <h2 class="title-font text-3xl md:text-4xl text-gray-700 mb-8 text-center">RESULTADOS ANTERIORES</h2>
-            <div class="space-y-4" id="results-container"></div>
+
+        <section id="open-games-section" class="shell" aria-labelledby="games-title">
+            <div class="section-head">
+                <div>
+                    <h2 id="games-title">Jogos abertos</h2>
+                    <p>Selecione uma odd, informe o valor e veja o retorno antes de confirmar.</p>
+                </div>
+                <div class="filters" role="group" aria-label="Filtros de jogos">
+                    <button class="filter-btn is-active" type="button" data-filter="all">Todos</button>
+                    <button class="filter-btn" type="button" data-filter="available">Disponíveis</button>
+                    <button class="filter-btn" type="button" data-filter="limited">No limite</button>
+                </div>
+            </div>
+            <div id="games-container" class="games-grid" aria-live="polite"></div>
+        </section>
+
+        <section id="results-section" class="shell" aria-labelledby="results-title">
+            <div class="section-head">
+                <div>
+                    <h2 id="results-title">Resultados anteriores</h2>
+                    <p>Histórico de partidas finalizadas e resultados declarados.</p>
+                </div>
+            </div>
+            <div id="results-container" class="results-list" aria-live="polite"></div>
         </section>
     </main>
 
-    <!-- Modals -->
-    <div id="login-modal" class="modal fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50">
-        <div class="bg-white rounded-lg p-8 max-w-sm w-full mx-4">
-            <h3 id="login-title" class="title-font text-2xl text-center mb-4 text-green-800">Login</h3>
-            <div class="space-y-4">
-                <div id="name-field" style="display: none;"><input type="text" id="user-name-input" placeholder="Seu Nome Completo" class="w-full px-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-green-500"></div>
-                <input type="text" id="user-pix-input" placeholder="Sua Chave PIX" class="w-full px-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-green-500">
-                <input type="password" id="user-password-input" placeholder="Sua Senha" class="w-full px-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-green-500">
+    <div id="login-modal" class="modal" role="dialog" aria-modal="true" aria-labelledby="login-title">
+        <div class="dialog">
+            <div class="dialog-head">
+                <h3 id="login-title">Entrar na AgroBet</h3>
+                <button id="close-login" class="icon-btn" type="button" title="Fechar" aria-label="Fechar">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
             </div>
-            <p id="login-error" class="text-red-500 text-sm text-center mt-2 h-4"></p>
-            <button id="action-btn" class="w-full mt-4 py-3 confirm-btn text-white font-bold rounded-md">Entrar</button>
-            <p class="text-center text-sm mt-4"><a href="#" id="switch-mode-link" class="text-green-600 hover:underline">Não tem uma conta? Registe-se</a></p>
+            <div class="dialog-body">
+                <div class="auth-grid">
+                    <label id="name-field" hidden>
+                        Nome completo
+                        <input type="text" id="user-name-input" autocomplete="name" placeholder="Seu nome">
+                    </label>
+                    <label>
+                        Chave PIX
+                        <input type="text" id="user-pix-input" autocomplete="username" placeholder="CPF, e-mail, telefone ou chave aleatória">
+                    </label>
+                    <label>
+                        Senha
+                        <input type="password" id="user-password-input" autocomplete="current-password" placeholder="Sua senha">
+                    </label>
+                </div>
+                <p id="login-error" class="inline-error" role="alert"></p>
+                <button id="action-btn" class="primary-btn card-action" type="button">
+                    <i class="fa-solid fa-lock"></i>
+                    Entrar
+                </button>
+                <button id="switch-mode-link" class="switch-link" type="button">Não tem uma conta? Registre-se</button>
+            </div>
         </div>
     </div>
-    <div id="my-bets-modal" class="modal fixed hidden inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50">
-         <div class="bg-white rounded-lg p-6 max-w-2xl w-full mx-4 max-h-[80vh] overflow-y-auto">
-             <div class="flex justify-between items-center mb-4">
-                 <h3 class="title-font text-2xl text-green-800">Minhas Apostas Confirmadas</h3>
-                 <button id="close-my-bets" class="text-gray-500 hover:text-gray-800 text-2xl">&times;</button>
-             </div>
-             <div id="my-bets-list" class="space-y-3"></div>
-         </div>
-    </div>
-    <div id="loading-modal" class="modal fixed hidden inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50">
-        <div class="bg-white rounded-lg p-8 text-center">
-            <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-green-800 mx-auto mb-4"></div>
-            <p class="text-lg font-semibold">A processar...</p>
+
+    <div id="my-bets-modal" class="modal" role="dialog" aria-modal="true" aria-labelledby="my-bets-title">
+        <div class="dialog wide">
+            <div class="dialog-head">
+                <h3 id="my-bets-title">Minhas apostas</h3>
+                <button id="close-my-bets" class="icon-btn" type="button" title="Fechar" aria-label="Fechar">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+            <div class="dialog-body">
+                <div id="my-bets-list" class="bet-list"></div>
+            </div>
         </div>
     </div>
+
+    <div id="loading-modal" class="modal" role="status" aria-live="polite">
+        <div class="dialog">
+            <div class="dialog-body">
+                <div class="loading-dots" aria-hidden="true"><span></span><span></span><span></span></div>
+                <span id="loading-text">Processando...</span>
+            </div>
+        </div>
+    </div>
+
+    <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
     <script>
         const SERVER_URL = 'https://agrobets.onrender.com';
-        let currentUser = null;
-        let isRegisterMode = false;
-        let allGames = [];
-        let currentUserBets = [];
+        const state = {
+            currentUser: null,
+            isRegisterMode: false,
+            allGames: [],
+            currentUserBets: [],
+            activeFilter: 'all'
+        };
 
-        // --- ELEMENTOS DO DOM ---
-        const gamesContainer = document.getElementById('games-container');
-        const resultsContainer = document.getElementById('results-container');
-        const loginModal = document.getElementById('login-modal');
-        const myBetsModal = document.getElementById('my-bets-modal');
-        const loadingModal = document.getElementById('loading-modal');
-        const actionBtn = document.getElementById('action-btn');
-        const switchModeLink = document.getElementById('switch-mode-link');
-        const pixInput = document.getElementById('user-pix-input');
-        const nameInput = document.getElementById('user-name-input');
-        const passwordInput = document.getElementById('user-password-input');
-        const nameField = document.getElementById('name-field');
-        const loginError = document.getElementById('login-error');
-        const loginTitle = document.getElementById('login-title');
-        const logoutBtn = document.getElementById('logout-btn');
+        const elements = {
+            gamesContainer: document.getElementById('games-container'),
+            resultsContainer: document.getElementById('results-container'),
+            loginModal: document.getElementById('login-modal'),
+            myBetsModal: document.getElementById('my-bets-modal'),
+            loadingModal: document.getElementById('loading-modal'),
+            loadingText: document.getElementById('loading-text'),
+            actionBtn: document.getElementById('action-btn'),
+            switchModeLink: document.getElementById('switch-mode-link'),
+            pixInput: document.getElementById('user-pix-input'),
+            nameInput: document.getElementById('user-name-input'),
+            passwordInput: document.getElementById('user-password-input'),
+            nameField: document.getElementById('name-field'),
+            loginError: document.getElementById('login-error'),
+            loginTitle: document.getElementById('login-title'),
+            logoutBtn: document.getElementById('logout-btn'),
+            loginOpenBtn: document.getElementById('login-open-btn'),
+            userInfo: document.getElementById('user-info'),
+            userNameDisplay: document.getElementById('user-name-display'),
+            myBetsList: document.getElementById('my-bets-list'),
+            metricGames: document.getElementById('metric-games'),
+            metricBets: document.getElementById('metric-bets'),
+            toast: document.getElementById('toast')
+        };
+
+        const currency = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' });
+
+        function escapeHTML(value) {
+            return String(value ?? '').replace(/[&<>"']/g, char => ({
+                '&': '&amp;',
+                '<': '&lt;',
+                '>': '&gt;',
+                '"': '&quot;',
+                "'": '&#39;'
+            })[char]);
+        }
+
+        function formatMoney(value) {
+            return currency.format(Number(value) || 0);
+        }
+
+        function firstName(name) {
+            return String(name || '').trim().split(/\s+/)[0] || 'apostador';
+        }
+
+        function showToast(message) {
+            elements.toast.textContent = message;
+            elements.toast.classList.add('is-visible');
+            clearTimeout(showToast.timeout);
+            showToast.timeout = setTimeout(() => elements.toast.classList.remove('is-visible'), 4200);
+        }
+
+        function setModal(modal, isOpen) {
+            modal.classList.toggle('is-open', isOpen);
+            document.body.classList.toggle('modal-open', document.querySelector('.modal.is-open') !== null);
+        }
+
+        function setLoading(isLoading, message = 'Processando...') {
+            elements.loadingText.textContent = message;
+            setModal(elements.loadingModal, isLoading);
+        }
+
+        async function fetchJSON(url, options = {}) {
+            const headers = { ...(options.headers || {}) };
+            if (options.body && !headers['Content-Type']) {
+                headers['Content-Type'] = 'application/json';
+            }
+            const response = await fetch(url, {
+                credentials: 'include',
+                headers,
+                ...options
+            });
+            const text = await response.text();
+            const data = text ? JSON.parse(text) : null;
+            if (!response.ok) {
+                throw new Error(data?.message || 'Não foi possível concluir a solicitação.');
+            }
+            return data;
+        }
+
+        function getUserGameTotals(gameId) {
+            const userBetsOnGame = state.currentUserBets.filter(bet => String(bet.gameId) === String(gameId));
+            const total = userBetsOnGame.reduce((acc, bet) => acc + Number(bet.betValue || 0), 0);
+            return { total, count: userBetsOnGame.length };
+        }
+
+        function setSkeletons() {
+            elements.gamesContainer.innerHTML = '<div class="skeleton"></div><div class="skeleton"></div>';
+            elements.resultsContainer.innerHTML = '<div class="skeleton" style="min-height:86px"></div>';
+        }
 
         async function loadOpenGames() {
             try {
-                const response = await fetch(`${SERVER_URL}/games`, { credentials: 'include' });
-                const games = await response.json();
-                allGames = games;
-                gamesContainer.innerHTML = games.length === 0 ? '<p class="text-center text-gray-500 col-span-2">Nenhum jogo aberto para apostas.</p>' : '';
-                
-                games.forEach(game => {
-                    const userBetsOnThisGame = currentUserBets.filter(bet => bet.gameId === game._id);
-                    const totalAlreadyBet = userBetsOnThisGame.reduce((acc, bet) => acc + bet.betValue, 0);
-                    const remainingValue = game.maxBetValue - totalAlreadyBet;
-
-                    let betLimitMessage = `Aposta máxima: R$ ${game.maxBetValue.toFixed(2)}`;
-                    if (totalAlreadyBet > 0) {
-                        betLimitMessage = `Já apostou R$ ${totalAlreadyBet.toFixed(2)}. Pode apostar mais R$ ${remainingValue.toFixed(2)}.`;
-                    }
-                    
-                    gamesContainer.innerHTML += `
-                    <div class="bet-card bg-white rounded-lg shadow-md border border-gray-200 overflow-hidden" data-game-id="${game._id}">
-                        <div class="bg-green-800 text-white py-2 px-4 flex justify-between items-center"><h3 class="title-font text-xl">${game.competition}</h3><div class="text-sm bg-white text-green-800 font-bold px-3 py-1 rounded-full">${game.date}</div></div>
-                        <div class="p-6">
-                            <div class="flex justify-around items-center mb-6"><div class="text-center w-1/3"><img src="${game.home.logo}" class="h-16 mx-auto mb-2" onerror="this.onerror=null;this.src='https://placehold.co/64x64/e2e8f0/e2e8f0?text=...';"><span class="font-bold">${game.home.name}</span></div><div class="text-2xl font-bold text-gray-400">VS</div><div class="text-center w-1/3"><img src="${game.away.logo}" class="h-16 mx-auto mb-2" onerror="this.onerror=null;this.src='https://placehold.co/64x64/e2e8f0/e2e8f0?text=...';"><span class="font-bold">${game.away.name}</span></div></div>
-                            <div class="mb-4">
-                                <h4 class="font-bold mb-2 text-center text-gray-700">PALPITE:</h4>
-                                <div class="grid grid-cols-3 gap-2 bet-options">
-                                    <button class="bet-option py-2 border rounded flex flex-col items-center" data-option="home" ${remainingValue <= 0 ? 'disabled' : ''}><span>${game.home.name}</span><span class="font-bold text-green-600">${game.odds.home.toFixed(2)}</span></button>
-                                    <button class="bet-option py-2 border rounded flex flex-col items-center" data-option="empate" ${remainingValue <= 0 ? 'disabled' : ''}><span>EMPATE</span><span class="font-bold text-green-600">${game.odds.draw.toFixed(2)}</span></button>
-                                    <button class="bet-option py-2 border rounded flex flex-col items-center" data-option="away" ${remainingValue <= 0 ? 'disabled' : ''}><span>${game.away.name}</span><span class="font-bold text-green-600">${game.odds.away.toFixed(2)}</span></button>
-                                </div>
-                            </div>
-                            <div class="mb-4">
-                                <h4 class="font-bold mb-2 text-center text-gray-700">VALOR DA APOSTA (R$):</h4>
-                                ${remainingValue > 0 ? `
-                                    <input type="number" class="bet-value-input w-full p-2 border rounded text-center" min="1" max="${remainingValue.toFixed(2)}" step="any" placeholder="Ex: 10.00">
-                                    <p class="text-xs text-center text-gray-500 mt-1">${betLimitMessage}</p>
-                                ` : `
-                                    <div class="text-center p-2 bg-gray-100 rounded-md">
-                                        <p class="font-bold text-red-600">Limite de aposta atingido!</p>
-                                        <p class="text-xs text-gray-600">Já apostou o máximo de R$ ${game.maxBetValue.toFixed(2)} neste jogo.</p>
-                                    </div>
-                                `}
-                            </div>
-                            <div class="text-center font-bold mb-4 text-lg">
-                                Retorno Potencial: <span class="potential-payout text-green-700">R$ 0.00</span>
-                            </div>
-                            <div class="bet-error text-red-500 text-sm text-center h-4 mb-2"></div>
-                            <button class="confirm-btn w-full py-3 rounded-md text-white font-bold text-lg" ${remainingValue <= 0 ? 'disabled' : ''}>
-                                ${remainingValue > 0 ? 'APOSTAR' : 'LIMITE ATINGIDO'}
-                            </button>
-                        </div>
-                    </div>`;
-                });
-                addGameEventListeners();
-            } catch (error) { 
-                console.error("Erro ao carregar jogos:", error);
-                gamesContainer.innerHTML = '<p class="text-center text-red-500 col-span-2">Não foi possível carregar os jogos. O servidor pode estar a iniciar. Tente recarregar a página em alguns segundos.</p>';
+                const games = await fetchJSON(`${SERVER_URL}/games`);
+                state.allGames = Array.isArray(games) ? games : [];
+                elements.metricGames.textContent = state.allGames.length;
+                renderGames();
+            } catch (error) {
+                console.error('Erro ao carregar jogos:', error);
+                elements.gamesContainer.innerHTML = '<div class="error-state">Não foi possível carregar os jogos agora. Tente novamente em alguns segundos.</div>';
             }
         }
 
         async function loadResults() {
-             try {
-                const response = await fetch(`${SERVER_URL}/results`, { credentials: 'include' });
-                const results = await response.json();
-                resultsContainer.innerHTML = results.length === 0 ? '<p class="text-center text-gray-500">Ainda não há resultados de jogos anteriores.</p>' : '';
-                results.forEach(game => {
-                    let winnerText = '';
-                    if (game.result === 'empate') {
-                        winnerText = `<span class="font-bold text-blue-600">EMPATE</span>`;
-                    } else {
-                        const winnerName = game.result === 'home' ? game.home.name : game.away.name;
-                        winnerText = `Vencedor: <span class="font-bold text-green-600">${winnerName.toUpperCase()}</span>`;
-                    }
-                    resultsContainer.innerHTML += `
-                        <div class="bg-white p-4 rounded-lg shadow-sm border flex items-center justify-between">
-                            <div>
-                                <p class="font-bold text-gray-800">${game.home.name} vs ${game.away.name}</p>
-                                <p class="text-sm text-gray-500">${game.competition} - ${game.date}</p>
-                            </div>
-                            <div class="text-right text-lg">${winnerText}</div>
-                        </div>`;
-                });
+            try {
+                const results = await fetchJSON(`${SERVER_URL}/results`);
+                if (!Array.isArray(results) || results.length === 0) {
+                    elements.resultsContainer.innerHTML = '<div class="empty">Ainda não há resultados finalizados.</div>';
+                    return;
+                }
+                elements.resultsContainer.innerHTML = results.map(renderResult).join('');
             } catch (error) {
-                console.error("Erro ao carregar resultados:", error);
-                resultsContainer.innerHTML = '<p class="text-center text-red-500">Não foi possível carregar os resultados.</p>';
+                console.error('Erro ao carregar resultados:', error);
+                elements.resultsContainer.innerHTML = '<div class="error-state">Não foi possível carregar os resultados.</div>';
             }
         }
 
-        function addGameEventListeners() {
-            document.querySelectorAll('.bet-card').forEach(card => {
-                const gameId = card.dataset.gameId;
-                const game = allGames.find(g => g._id === gameId);
-                let selectedOption = null;
-                let selectedOdd = 0;
+        function filteredGames() {
+            return state.allGames.filter(game => {
+                const { total } = getUserGameTotals(game._id);
+                const remaining = Math.max(0, Number(game.maxBetValue || 0) - total);
+                if (state.activeFilter === 'available') return remaining > 0;
+                if (state.activeFilter === 'limited') return remaining <= 0;
+                return true;
+            });
+        }
 
-                const betOptions = card.querySelector('.bet-options');
+        function renderGames() {
+            const games = filteredGames();
+            if (state.allGames.length === 0) {
+                elements.gamesContainer.innerHTML = '<div class="empty">Nenhum jogo aberto para apostas no momento.</div>';
+                return;
+            }
+            if (games.length === 0) {
+                elements.gamesContainer.innerHTML = '<div class="empty">Nenhum jogo corresponde a este filtro.</div>';
+                return;
+            }
+            elements.gamesContainer.innerHTML = games.map(renderGameCard).join('');
+            bindGameCards();
+        }
+
+        function renderGameCard(game) {
+            const { total } = getUserGameTotals(game._id);
+            const maxBet = Number(game.maxBetValue || 0);
+            const remaining = Math.max(0, maxBet - total);
+            const disabled = remaining <= 0;
+            const date = escapeHTML(game.date || 'Data a confirmar');
+            const competition = escapeHTML(game.competition || 'Competição');
+            const homeName = escapeHTML(game.home?.name || 'Casa');
+            const awayName = escapeHTML(game.away?.name || 'Visitante');
+            const homeLogo = escapeHTML(game.home?.logo || '');
+            const awayLogo = escapeHTML(game.away?.logo || '');
+            const limitMessage = total > 0
+                ? `Você já apostou ${formatMoney(total)}. Restam ${formatMoney(remaining)} neste jogo.`
+                : `Limite por jogo: ${formatMoney(maxBet)}.`;
+
+            return `
+                <article class="game-card" data-game-id="${escapeHTML(game._id)}" data-remaining="${remaining}">
+                    <div class="game-head">
+                        <div>
+                            <b>${competition}</b>
+                            <span>${date}</span>
+                        </div>
+                        <span class="status-pill"><i class="fa-solid fa-circle"></i>${disabled ? 'Limite atingido' : 'Aberto'}</span>
+                    </div>
+                    <div class="game-body">
+                        <div class="teams">
+                            <div class="team">
+                                <img class="team-logo" src="${homeLogo}" alt="Escudo ${homeName}" loading="lazy" onerror="this.src='https://placehold.co/128x128/14251b/31d17d?text=AG';">
+                                <strong>${homeName}</strong>
+                            </div>
+                            <div class="vs">VS</div>
+                            <div class="team">
+                                <img class="team-logo" src="${awayLogo}" alt="Escudo ${awayName}" loading="lazy" onerror="this.src='https://placehold.co/128x128/14251b/31d17d?text=AG';">
+                                <strong>${awayName}</strong>
+                            </div>
+                        </div>
+                        <div class="odds-grid" role="group" aria-label="Odds disponíveis">
+                            ${renderOddButton('home', homeName, game.odds?.home, disabled)}
+                            ${renderOddButton('empate', 'Empate', game.odds?.draw, disabled)}
+                            ${renderOddButton('away', awayName, game.odds?.away, disabled)}
+                        </div>
+                        <div class="bet-panel">
+                            <div class="field">
+                                <input class="bet-value-input" type="number" min="1" max="${remaining.toFixed(2)}" step="0.01" inputmode="decimal" placeholder="Valor da aposta" ${disabled ? 'disabled' : ''}>
+                            </div>
+                            <div class="payout">
+                                <span>Retorno</span>
+                                <b class="potential-payout">${formatMoney(0)}</b>
+                            </div>
+                        </div>
+                        <p class="limit-note">${disabled ? `Limite de ${formatMoney(maxBet)} atingido para esta partida.` : limitMessage}</p>
+                        <p class="inline-error bet-error" role="alert"></p>
+                        <button class="primary-btn card-action confirm-btn" type="button" ${disabled ? 'disabled' : ''}>
+                            <i class="fa-solid fa-lock"></i>
+                            ${disabled ? 'Limite atingido' : 'Confirmar aposta'}
+                        </button>
+                    </div>
+                </article>`;
+        }
+
+        function renderOddButton(option, label, odd, disabled) {
+            return `
+                <button class="odd-btn" type="button" data-option="${option}" data-odd="${Number(odd || 0)}" ${disabled ? 'disabled' : ''}>
+                    <span>${label}</span>
+                    <b>${Number(odd || 0).toFixed(2)}</b>
+                </button>`;
+        }
+
+        function renderResult(game) {
+            const home = escapeHTML(game.home?.name || 'Casa');
+            const away = escapeHTML(game.away?.name || 'Visitante');
+            const result = game.result === 'empate'
+                ? 'Empate'
+                : game.result === 'home'
+                    ? home
+                    : game.result === 'away'
+                        ? away
+                        : 'Pendente';
+
+            return `
+                <article class="result-card">
+                    <div>
+                        <p><b>${home} vs ${away}</b></p>
+                        <small>${escapeHTML(game.competition || 'Competição')} - ${escapeHTML(game.date || 'Data')}</small>
+                    </div>
+                    <div class="winner">${escapeHTML(result)}</div>
+                </article>`;
+        }
+
+        function bindGameCards() {
+            document.querySelectorAll('.game-card').forEach(card => {
+                const gameId = card.dataset.gameId;
                 const valueInput = card.querySelector('.bet-value-input');
                 const payoutEl = card.querySelector('.potential-payout');
                 const confirmBtn = card.querySelector('.confirm-btn');
                 const errorEl = card.querySelector('.bet-error');
+                let selectedOption = null;
+                let selectedOdd = 0;
 
-                if (confirmBtn.disabled) return; // Se o botão já estiver desativado, não adicione listeners
-
-                betOptions.addEventListener('click', e => {
-                    const button = e.target.closest('button.bet-option');
-                    if (!button || button.disabled) return;
-                    
-                    betOptions.querySelectorAll('.bet-option').forEach(btn => btn.classList.remove('selected'));
-                    button.classList.add('selected');
-
-                    selectedOption = button.dataset.option;
-                    const oddsKey = selectedOption === 'empate' ? 'draw' : selectedOption;
-                    selectedOdd = game.odds[oddsKey] || 0;
-                    updatePayout();
+                card.querySelectorAll('.odd-btn').forEach(button => {
+                    button.addEventListener('click', () => {
+                        card.querySelectorAll('.odd-btn').forEach(item => item.classList.remove('is-selected'));
+                        button.classList.add('is-selected');
+                        selectedOption = button.dataset.option;
+                        selectedOdd = Number(button.dataset.odd || 0);
+                        updatePayout();
+                    });
                 });
 
-                valueInput.addEventListener('input', updatePayout);
+                valueInput?.addEventListener('input', updatePayout);
 
                 function updatePayout() {
-                    const value = parseFloat(valueInput.value) || 0;
-                    const payout = value * selectedOdd;
-                    payoutEl.textContent = `R$ ${payout.toFixed(2)}`;
+                    const value = Number(valueInput.value || 0);
+                    payoutEl.textContent = formatMoney(value * selectedOdd);
+                    errorEl.textContent = '';
                     confirmBtn.disabled = !(selectedOption && value > 0);
                 }
 
-                confirmBtn.addEventListener('click', () => {
-                    errorEl.textContent = ''; // Limpa erro anterior
-                    const value = parseFloat(valueInput.value);
+                confirmBtn?.addEventListener('click', () => {
+                    const value = Number(valueInput.value || 0);
+                    const max = Number(valueInput.max || 0);
+                    errorEl.textContent = '';
 
-                    // Validação do lado do cliente
-                    if (value > parseFloat(valueInput.max)) {
-                        errorEl.textContent = `O valor máximo restante é R$ ${parseFloat(valueInput.max).toFixed(2)}.`;
+                    if (!state.currentUser) {
+                        showToast('Faça login para confirmar sua aposta.');
+                        setModal(elements.loginModal, true);
                         return;
                     }
-                    
+                    if (!selectedOption) {
+                        errorEl.textContent = 'Escolha um palpite para continuar.';
+                        return;
+                    }
+                    if (!Number.isFinite(value) || value <= 0) {
+                        errorEl.textContent = 'Informe um valor válido.';
+                        return;
+                    }
+                    if (value > max) {
+                        errorEl.textContent = `O valor máximo restante é ${formatMoney(max)}.`;
+                        return;
+                    }
                     handleBet(gameId, selectedOption, value, card);
                 });
+
+                updatePayout();
             });
         }
 
         async function handleBet(gameId, option, value, card) {
             const errorEl = card.querySelector('.bet-error');
-            if (!currentUser) {
-                showError("Por favor, faça login para poder apostar.");
-                loginModal.style.display = 'flex';
-                return;
-            }
-            loadingModal.classList.remove('hidden');
-            const betData = { gameId, option, value, user: currentUser };
+            setLoading(true, 'Criando pagamento...');
             try {
-                const response = await fetch(`${SERVER_URL}/criar-pagamento`, {
+                const data = await fetchJSON(`${SERVER_URL}/criar-pagamento`, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(betData),
-                    credentials: 'include'
+                    body: JSON.stringify({ gameId, option, value, user: state.currentUser })
                 });
-                if (!response.ok) {
-                    const err = await response.json();
-                    throw new Error(err.message || 'A resposta do servidor não foi OK.');
-                }
-                const data = await response.json();
+                if (!data?.init_point) throw new Error('Pagamento criado sem URL de checkout.');
                 window.location.href = data.init_point;
             } catch (error) {
-                loadingModal.classList.add('hidden');
-                if (errorEl) {
-                    errorEl.textContent = error.message;
-                }
-                console.error("Erro ao criar pagamento:", error);
+                errorEl.textContent = error.message;
+                showToast(error.message);
+            } finally {
+                setLoading(false);
             }
         }
-        
+
         async function handleAuthAction() {
-            const pix = pixInput.value.trim();
-            const password = passwordInput.value.trim();
-            const name = nameInput.value.trim();
-            showError('');
-            if (!pix || !password || (isRegisterMode && !name)) { return showError("Por favor, preencha todos os campos."); }
+            const pix = elements.pixInput.value.trim();
+            const password = elements.passwordInput.value.trim();
+            const name = elements.nameInput.value.trim();
+            elements.loginError.textContent = '';
 
-            loadingModal.querySelector('p').textContent = 'A processar...';
-            loadingModal.classList.remove('hidden');
+            if (!pix || !password || (state.isRegisterMode && !name)) {
+                elements.loginError.textContent = 'Preencha todos os campos para continuar.';
+                return;
+            }
 
-            const url = isRegisterMode ? `${SERVER_URL}/register` : `${SERVER_URL}/login`;
-            const body = isRegisterMode ? { name, pix, password } : { pix, password };
-
+            setLoading(true, state.isRegisterMode ? 'Criando conta...' : 'Entrando...');
             try {
-                const response = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), credentials: 'include' });
-                const data = await response.json();
-                if (data.success) { 
-                    loginSuccess(data.user); 
-                } else { 
-                    showError(data.message || 'Ocorreu um erro.'); 
-                }
-            } catch (err) { 
-                showError("Erro de comunicação com o servidor."); 
-            } finally { 
-                loadingModal.classList.add('hidden'); 
+                const data = await fetchJSON(`${SERVER_URL}/${state.isRegisterMode ? 'register' : 'login'}`, {
+                    method: 'POST',
+                    body: JSON.stringify(state.isRegisterMode ? { name, pix, password } : { pix, password })
+                });
+                if (!data?.success) throw new Error(data?.message || 'Não foi possível autenticar.');
+                loginSuccess(data.user);
+                showToast(state.isRegisterMode ? 'Conta criada com sucesso.' : 'Login realizado com sucesso.');
+            } catch (error) {
+                elements.loginError.textContent = error.message;
+            } finally {
+                setLoading(false);
             }
         }
-        
-        async function initializeUserSession() {
-            if (!currentUser) return;
-            try {
-                const response = await fetch(`${SERVER_URL}/my-bets/${currentUser.pix}`, { credentials: 'include' });
-                const data = await response.json();
-                if (data.success) {
-                    currentUserBets = data.bets;
-                }
-            } catch (error) {
-                console.error("Erro ao carregar as apostas do utilizador:", error);
-                currentUserBets = [];
+
+        async function refreshUserBets() {
+            if (!state.currentUser?.pix) {
+                state.currentUserBets = [];
+                elements.metricBets.textContent = '0';
+                return;
             }
+            try {
+                const data = await fetchJSON(`${SERVER_URL}/my-bets/${encodeURIComponent(state.currentUser.pix)}`);
+                state.currentUserBets = data?.success && Array.isArray(data.bets) ? data.bets : [];
+            } catch (error) {
+                console.error('Erro ao carregar apostas do usuário:', error);
+                state.currentUserBets = [];
+            }
+            elements.metricBets.textContent = state.currentUserBets.length;
+        }
+
+        async function initializeUserSession() {
+            await refreshUserBets();
             await Promise.all([loadOpenGames(), loadResults()]);
         }
-        
+
         function loginSuccess(user) {
-            currentUser = user;
-            localStorage.setItem('agrobetUser', JSON.stringify(currentUser));
-            document.getElementById('user-name-display').textContent = currentUser.name.split(' ')[0];
-            document.getElementById('user-info').classList.remove('hidden');
-            logoutBtn.classList.remove('hidden');
-            loginModal.style.display = 'none';
+            state.currentUser = user;
+            localStorage.setItem('agrobetUser', JSON.stringify(user));
+            elements.userNameDisplay.textContent = firstName(user.name);
+            elements.userInfo.classList.add('is-visible');
+            elements.logoutBtn.classList.add('is-visible');
+            elements.loginOpenBtn.style.display = 'none';
+            setModal(elements.loginModal, false);
             initializeUserSession();
         }
 
         function logout() {
-            currentUser = null;
-            currentUserBets = [];
+            state.currentUser = null;
+            state.currentUserBets = [];
             localStorage.removeItem('agrobetUser');
-            document.getElementById('user-info').classList.add('hidden');
-            logoutBtn.classList.add('hidden');
-            loginModal.style.display = 'flex';
-            gamesContainer.innerHTML = '';
-            resultsContainer.innerHTML = '';
-            loadOpenGames();
-            loadResults();
-        }
-
-        function showError(message) { loginError.textContent = message; }
-
-        function checkStoredUser() {
-            const storedUser = localStorage.getItem('agrobetUser');
-            if (storedUser) {
-                loginSuccess(JSON.parse(storedUser));
-            } else {
-                loginModal.style.display = 'flex';
-                loadOpenGames();
-                loadResults();
-            }
-        }
-        
-        async function displayMyBets() {
-            if (!currentUser) return;
-            const listElement = document.getElementById('my-bets-list');
-            listElement.innerHTML = '<p class="text-gray-500">A carregar apostas...</p>';
-            myBetsModal.classList.remove('hidden');
-
-            // Re-utiliza os dados já carregados
-            if (currentUserBets.length > 0) {
-                 listElement.innerHTML = currentUserBets.map(bet => `
-                    <div class="border rounded-md p-3 bg-gray-50">
-                        <p class="font-bold">${bet.gameTitle}</p>
-                        <p>Palpite: ${bet.betChoice} - <span class="font-bold text-green-600">R$ ${Number(bet.betValue).toFixed(2)}</span> (Odd: ${bet.odds.toFixed(2)})</p>
-                        <p class="font-bold">Retorno Potencial: R$ ${bet.potentialPayout.toFixed(2)}</p>
-                        <p class="text-sm text-gray-500">${new Date(bet.date).toLocaleString('pt-BR')}</p>
-                    </div>
-                `).join('');
-            } else {
-                 listElement.innerHTML = '<p class="text-gray-500">Ainda não tem nenhuma aposta confirmada.</p>';
-            }
+            elements.userInfo.classList.remove('is-visible');
+            elements.logoutBtn.classList.remove('is-visible');
+            elements.loginOpenBtn.style.display = '';
+            elements.metricBets.textContent = '0';
+            renderGames();
+            showToast('Você saiu da sua conta.');
         }
 
         function toggleMode() {
-            isRegisterMode = !isRegisterMode;
-            showError('');
-            loginTitle.textContent = isRegisterMode ? 'Registo' : 'Login';
-            actionBtn.textContent = isRegisterMode ? 'Registar' : 'Entrar';
-            switchModeLink.textContent = isRegisterMode ? 'Já tem uma conta? Entre' : 'Não tem uma conta? Registe-se';
-            nameField.style.display = isRegisterMode ? 'block' : 'none';
+            state.isRegisterMode = !state.isRegisterMode;
+            elements.loginError.textContent = '';
+            elements.loginTitle.textContent = state.isRegisterMode ? 'Criar conta' : 'Entrar na AgroBet';
+            elements.actionBtn.innerHTML = state.isRegisterMode
+                ? '<i class="fa-solid fa-user-plus"></i> Registrar'
+                : '<i class="fa-solid fa-lock"></i> Entrar';
+            elements.switchModeLink.textContent = state.isRegisterMode
+                ? 'Já tem uma conta? Entrar'
+                : 'Não tem uma conta? Registre-se';
+            elements.nameField.hidden = !state.isRegisterMode;
+            elements.passwordInput.autocomplete = state.isRegisterMode ? 'new-password' : 'current-password';
         }
-        
-        document.addEventListener('DOMContentLoaded', () => {
-            actionBtn.addEventListener('click', handleAuthAction);
-            switchModeLink.addEventListener('click', (e) => { e.preventDefault(); toggleMode(); });
-            logoutBtn.addEventListener('click', logout);
+
+        function displayMyBets() {
+            if (!state.currentUser) {
+                showToast('Faça login para ver suas apostas.');
+                setModal(elements.loginModal, true);
+                return;
+            }
+
+            if (state.currentUserBets.length === 0) {
+                elements.myBetsList.innerHTML = '<div class="empty">Você ainda não tem apostas confirmadas.</div>';
+            } else {
+                elements.myBetsList.innerHTML = state.currentUserBets.map(bet => `
+                    <article class="bet-item">
+                        <b>${escapeHTML(bet.gameTitle || 'Jogo')}</b>
+                        <p>Palpite: ${escapeHTML(bet.betChoice || '-')} | Valor: <b>${formatMoney(bet.betValue)}</b> | Odd: ${Number(bet.odds || 0).toFixed(2)}</p>
+                        <p>Retorno potencial: <b>${formatMoney(bet.potentialPayout)}</b></p>
+                        <p>${bet.date ? new Date(bet.date).toLocaleString('pt-BR') : ''}</p>
+                    </article>
+                `).join('');
+            }
+            setModal(elements.myBetsModal, true);
+        }
+
+        function restoreSession() {
+            const storedUser = localStorage.getItem('agrobetUser');
+            if (!storedUser) {
+                elements.metricBets.textContent = '0';
+                Promise.all([loadOpenGames(), loadResults()]);
+                return;
+            }
+
+            try {
+                loginSuccess(JSON.parse(storedUser));
+            } catch {
+                localStorage.removeItem('agrobetUser');
+                Promise.all([loadOpenGames(), loadResults()]);
+            }
+        }
+
+        function bindGlobalEvents() {
+            elements.actionBtn.addEventListener('click', handleAuthAction);
+            elements.switchModeLink.addEventListener('click', toggleMode);
+            elements.logoutBtn.addEventListener('click', logout);
+            elements.loginOpenBtn.addEventListener('click', () => setModal(elements.loginModal, true));
+            document.getElementById('close-login').addEventListener('click', () => setModal(elements.loginModal, false));
             document.getElementById('my-bets-btn').addEventListener('click', displayMyBets);
-            document.getElementById('close-my-bets').addEventListener('click', () => { myBetsModal.classList.add('hidden'); });
-            checkStoredUser();
+            document.getElementById('hero-bets-btn').addEventListener('click', displayMyBets);
+            document.getElementById('close-my-bets').addEventListener('click', () => setModal(elements.myBetsModal, false));
+
+            document.querySelectorAll('.filter-btn').forEach(button => {
+                button.addEventListener('click', () => {
+                    state.activeFilter = button.dataset.filter;
+                    document.querySelectorAll('.filter-btn').forEach(item => item.classList.remove('is-active'));
+                    button.classList.add('is-active');
+                    renderGames();
+                });
+            });
+
+            document.addEventListener('keydown', event => {
+                if (event.key === 'Escape') {
+                    document.querySelectorAll('.modal.is-open').forEach(modal => setModal(modal, false));
+                }
+                if (event.key === 'Enter' && elements.loginModal.classList.contains('is-open')) {
+                    handleAuthAction();
+                }
+            });
+
+            document.querySelectorAll('.modal').forEach(modal => {
+                modal.addEventListener('click', event => {
+                    if (event.target === modal && modal !== elements.loadingModal) setModal(modal, false);
+                });
+            });
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            bindGlobalEvents();
+            setSkeletons();
+            restoreSession();
         });
     </script>
 </body>
 </html>
-

@@ -38,6 +38,7 @@ const Game = mongoose.model('Game', GameSchema);
 
 const BetSchema = new mongoose.Schema({
     gameId: { type: mongoose.Schema.Types.ObjectId, ref: 'Game' },
+    paymentId: { type: String, unique: true, sparse: true, index: true },
     gameTitle: String,
     betChoice: String,
     betValue: Number,
@@ -52,19 +53,57 @@ const Bet = mongoose.model('Bet', BetSchema);
 // --- Conexão e Configuração do Servidor ---
 mongoose.connect(process.env.MONGODB_URI).then(() => console.log("MongoDB conectado.")).catch(err => console.error(err));
 const app = express();
+app.disable('x-powered-by');
 
+const allowedOrigins = (process.env.FRONTEND_URL || '')
+    .split(',')
+    .map(origin => origin.trim())
+    .filter(Boolean);
 const corsOptions = {
-    origin: process.env.FRONTEND_URL || '*', // Permite qualquer origem como fallback
+    origin(origin, callback) {
+        if (!origin || allowedOrigins.length === 0 || allowedOrigins.includes(origin)) {
+            return callback(null, true);
+        }
+        return callback(new Error('Origem não permitida pelo CORS.'));
+    },
     credentials: true
 };
 app.use(cors(corsOptions));
 
-app.use(bodyParser.json());
-app.use(bodyParser.urlencoded({ extended: true }));
+app.use((req, res, next) => {
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+    res.setHeader('Permissions-Policy', 'geolocation=(), microphone=(), camera=()');
+    next();
+});
+app.use(bodyParser.json({ limit: '80kb' }));
+app.use(bodyParser.urlencoded({ extended: true, limit: '80kb' }));
 app.use(cookieParser());
 const client = new MercadoPagoConfig({ accessToken: process.env.MERCADO_PAGO_ACCESS_TOKEN });
 const preference = new Preference(client);
 const payment = new Payment(client);
+
+const VALID_BET_OPTIONS = new Set(['home', 'away', 'empate']);
+
+function cleanText(value, maxLength = 140) {
+    return String(value || '').trim().replace(/\s+/g, ' ').slice(0, maxLength);
+}
+
+function toMoney(value) {
+    const numericValue = Number(value);
+    if (!Number.isFinite(numericValue)) return null;
+    return Math.round(numericValue * 100) / 100;
+}
+
+function escapeHtml(value) {
+    return String(value ?? '').replace(/[&<>"']/g, char => ({
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#39;'
+    })[char]);
+}
 
 // --- Middleware de Autenticação do Admin ---
 const authAdmin = (req, res, next) => {
@@ -145,7 +184,11 @@ app.get('/', (req, res) => res.send('<h1>Servidor do AgroBet está no ar!</h1>')
 
 app.post('/login', async (req, res) => {
     try {
-        const { pix, password } = req.body;
+        const pix = cleanText(req.body.pix, 180);
+        const password = String(req.body.password || '');
+        if (!pix || !password) {
+            return res.status(400).json({ success: false, message: 'Informe PIX e senha.' });
+        }
         const user = await User.findOne({ pix });
         if (!user) return res.status(404).json({ success: false, message: 'Utilizador não encontrado.' });
         const isMatch = await bcrypt.compare(password, user.password);
@@ -156,7 +199,12 @@ app.post('/login', async (req, res) => {
 
 app.post('/register', async (req, res) => {
     try {
-        const { name, pix, password } = req.body;
+        const name = cleanText(req.body.name, 90);
+        const pix = cleanText(req.body.pix, 180);
+        const password = String(req.body.password || '');
+        if (!name || !pix || password.length < 6) {
+            return res.status(400).json({ success: false, message: 'Nome, PIX e senha com pelo menos 6 caracteres são obrigatórios.' });
+        }
         let user = await User.findOne({ pix });
         if (user) return res.status(400).json({ success: false, message: 'Esta chave PIX já está registada.' });
         const salt = await bcrypt.genSalt(10);
@@ -175,15 +223,36 @@ app.get('/games', async (req, res) => {
 });
 
 app.post('/criar-pagamento', async (req, res) => {
-    const { gameId, option, value, user } = req.body;
     try {
+        const { gameId, option, user } = req.body;
+        const value = toMoney(req.body.value);
+        const userPix = cleanText(user?.pix, 180);
+
+        if (!mongoose.Types.ObjectId.isValid(gameId)) {
+            return res.status(400).json({ message: 'Jogo inválido.' });
+        }
+        if (!VALID_BET_OPTIONS.has(option)) {
+            return res.status(400).json({ message: 'Palpite inválido.' });
+        }
+        if (!value || value <= 0) {
+            return res.status(400).json({ message: 'Informe um valor de aposta válido.' });
+        }
+        if (!userPix) {
+            return res.status(401).json({ message: 'Faça login para apostar.' });
+        }
+
+        const registeredUser = await User.findOne({ pix: userPix }).lean();
+        if (!registeredUser) {
+            return res.status(401).json({ message: 'Usuário não encontrado. Faça login novamente.' });
+        }
+
         const game = await Game.findById(gameId);
         if (!game || game.status !== 'aberto') {
             return res.status(400).json({ message: 'Este jogo não está mais aberto para apostas.' });
         }
         
-        const userBetsOnGame = await Bet.find({ gameId: gameId, 'user.pix': user.pix, status: 'approved' });
-        const totalBetByUser = userBetsOnGame.reduce((acc, bet) => acc + bet.betValue, 0);
+        const userBetsOnGame = await Bet.find({ gameId: gameId, 'user.pix': registeredUser.pix, status: 'approved' }).lean();
+        const totalBetByUser = userBetsOnGame.reduce((acc, bet) => acc + Number(bet.betValue || 0), 0);
 
         if ((totalBetByUser + value) > game.maxBetValue) {
             const remainingValue = game.maxBetValue - totalBetByUser;
@@ -195,11 +264,18 @@ app.post('/criar-pagamento', async (req, res) => {
 
 
         const oddsKey = option === 'empate' ? 'draw' : option;
-        const odds = game.odds[oddsKey];
-        const potentialPayout = value * odds;
+        const odds = Number(game.odds[oddsKey]);
+        if (!Number.isFinite(odds) || odds <= 0) {
+            return res.status(400).json({ message: 'Odd inválida para este jogo.' });
+        }
+        const potentialPayout = toMoney(value * odds);
         const betChoiceText = option === 'empate' ? 'Empate' : game[option].name;
         
-        const redirectUrl = process.env.SUCCESS_REDIRECT_URL || process.env.FRONTEND_URL;
+        const redirectUrl = process.env.SUCCESS_REDIRECT_URL || allowedOrigins[0] || req.get('origin');
+        const serverUrl = process.env.SERVER_URL;
+        if (!redirectUrl || !serverUrl) {
+            return res.status(500).json({ message: 'Configuração de URLs do servidor incompleta.' });
+        }
 
         const preferenceData = {
             body: {
@@ -208,14 +284,14 @@ app.post('/criar-pagamento', async (req, res) => {
                     title: `Aposta: ${game.home.name} vs ${game.away.name}`,
                     description: `Palpite: ${betChoiceText}`,
                     quantity: 1,
-                    unit_price: Number(value),
+                    unit_price: value,
                     currency_id: 'BRL'
                 }],
                 back_urls: { success: redirectUrl, failure: redirectUrl, pending: redirectUrl },
                 auto_return: 'approved', 
-                notification_url: `${process.env.SERVER_URL}/webhook-mercadopago`,
+                notification_url: `${serverUrl}/webhook-mercadopago`,
                 metadata: {
-                    game_id: gameId, user_pix: user.pix, user_name: user.name,
+                    game_id: gameId, user_pix: registeredUser.pix, user_name: registeredUser.name,
                     bet_choice: betChoiceText, bet_value: value,
                     odds: odds, potential_payout: potentialPayout
                 }
@@ -231,20 +307,25 @@ app.post('/criar-pagamento', async (req, res) => {
 
 app.post('/webhook-mercadopago', async (req, res) => {
     try {
-        if (req.body.type === 'payment') {
+        if (req.body.type === 'payment' && req.body.data?.id) {
             const paymentDetails = await payment.get({ id: req.body.data.id });
             if (paymentDetails.status === 'approved') {
+                const paymentId = String(paymentDetails.id || req.body.data.id);
+                const existingBet = await Bet.findOne({ paymentId });
+                if (existingBet) return res.sendStatus(200);
+
                 const metadata = paymentDetails.metadata;
                 const game = await Game.findById(metadata.game_id);
                 const newBet = new Bet({
+                    paymentId,
                     gameId: metadata.game_id,
                     gameTitle: game ? `${game.home.name} vs ${game.away.name}` : 'Jogo Desconhecido',
                     betChoice: metadata.bet_choice, betValue: Number(metadata.bet_value),
                     date: new Date(), user: { name: metadata.user_name, pix: metadata.user_pix },
-                    status: 'approved', odds: metadata.odds, potentialPayout: metadata.potential_payout
+                    status: 'approved', odds: Number(metadata.odds), potentialPayout: Number(metadata.potential_payout)
                 });
                 await newBet.save();
-                updateOdds(metadata.game_id);
+                await updateOdds(metadata.game_id);
             }
         }
         res.sendStatus(200);
@@ -253,7 +334,9 @@ app.post('/webhook-mercadopago', async (req, res) => {
 
 app.get('/my-bets/:pix', async (req, res) => {
     try {
-        const bets = await Bet.find({ 'user.pix': req.params.pix, status: 'approved' }).sort({ date: -1 });
+        const pix = cleanText(req.params.pix, 180);
+        if (!pix) return res.status(400).json({ success: false, message: 'PIX inválido.' });
+        const bets = await Bet.find({ 'user.pix': pix, status: 'approved' }).sort({ date: -1 });
         res.json({ success: true, bets });
     } catch (error) { res.json({ success: false, message: 'Erro ao buscar apostas.' }); }
 });
@@ -300,7 +383,12 @@ app.post('/admin/login', (req, res) => {
     const { password } = req.body;
     if (password === process.env.ADMIN_PASSWORD) {
         const token = jwt.sign({ admin: true }, process.env.JWT_SECRET, { expiresIn: '1h' });
-        res.cookie('admin_token', token, { httpOnly: true, secure: true, sameSite: 'strict', maxAge: 3600000 });
+        res.cookie('admin_token', token, {
+            httpOnly: true,
+            secure: process.env.NODE_ENV === 'production',
+            sameSite: 'strict',
+            maxAge: 3600000
+        });
         res.redirect('/admin/dashboard');
     } else {
         res.send('<h1>Senha incorreta.</h1><a href="/admin">Tentar novamente</a>');
@@ -633,13 +721,21 @@ app.get('/admin/games', authAdmin, async (req, res) => {
 app.post('/admin/add-game', authAdmin, async (req, res) => {
     try {
         const { home_name, home_logo, away_name, away_logo, date, competition, odds_home, odds_draw, odds_away, max_bet_value } = req.body;
+        const oddsHome = toMoney(odds_home);
+        const oddsDraw = toMoney(odds_draw);
+        const oddsAway = toMoney(odds_away);
+        const maxBetValue = toMoney(max_bet_value);
+        if (!oddsHome || !oddsDraw || !oddsAway || !maxBetValue || maxBetValue <= 0) {
+            return res.status(400).send("Odds e limite de aposta precisam ser valores válidos.");
+        }
         const newGame = new Game({
-            home: { name: home_name, logo: home_logo },
-            away: { name: away_name, logo: away_logo },
-            date, competition,
-            odds: { home: parseFloat(odds_home), draw: parseFloat(odds_draw), away: parseFloat(odds_away) },
-            initialOdds: { home: parseFloat(odds_home), draw: parseFloat(odds_draw), away: parseFloat(odds_away) },
-            maxBetValue: parseFloat(max_bet_value)
+            home: { name: cleanText(home_name), logo: cleanText(home_logo, 500) },
+            away: { name: cleanText(away_name), logo: cleanText(away_logo, 500) },
+            date: cleanText(date, 80),
+            competition: cleanText(competition, 100),
+            odds: { home: oddsHome, draw: oddsDraw, away: oddsAway },
+            initialOdds: { home: oddsHome, draw: oddsDraw, away: oddsAway },
+            maxBetValue
         });
         await newGame.save();
         res.redirect('/admin/games');
@@ -672,12 +768,19 @@ app.get('/admin/edit-game/:id', authAdmin, async(req, res) => {
 app.post('/admin/edit-game/:id', authAdmin, async(req, res) => {
     try {
         const { odds_home, odds_draw, odds_away, max_bet_value } = req.body;
+        const oddsHome = toMoney(odds_home);
+        const oddsDraw = toMoney(odds_draw);
+        const oddsAway = toMoney(odds_away);
+        const maxBetValue = toMoney(max_bet_value);
+        if (!oddsHome || !oddsDraw || !oddsAway || !maxBetValue || maxBetValue <= 0) {
+            return res.status(400).send("Odds e limite de aposta precisam ser valores válidos.");
+        }
         await Game.findByIdAndUpdate(req.params.id, {
             $set: {
-                'odds.home': parseFloat(odds_home),
-                'odds.draw': parseFloat(odds_draw),
-                'odds.away': parseFloat(odds_away),
-                'maxBetValue': parseFloat(max_bet_value)
+                'odds.home': oddsHome,
+                'odds.draw': oddsDraw,
+                'odds.away': oddsAway,
+                'maxBetValue': maxBetValue
             }
         });
         res.redirect('/admin/games');
